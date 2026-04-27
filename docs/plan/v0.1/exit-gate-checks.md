@@ -24,4 +24,5 @@ v0.1 completion requires docs completeness plus the agreed minimal executable pr
 1. Charter and boundaries: [v0.1 Charter](charter.md)
 2. Canonical terminology: [v0.1 Terminology](terminology.md)
 3. Milestones and sequence: [v0.1 Roadmap](roadmap.md)
-4. Planning umbrella: [Plan](../../plan.md)
+4. Architecture evaluation rubric: [Data Oriented Design Principles](data-oriented-design-principles.md)
+5. Planning umbrella: [Plan](../../plan.md)

@@ -8,6 +8,10 @@ v0.1 establishes the architecture and contracts needed to implement the backend 
 Define a stable, implementation-ready foundation for backend semantics and interfaces.
 The baseline is assembly-like IR semantics, not high-level language semantics.
 
+## Implementation Baseline
+1. Core implementation language: C++20.
+2. C API deliverable: TI-IR serialization boundary API for stable external integration.
+
 ## In Scope
 1. TI-IR model and storage contracts.
 2. SSA invariants and validation rules.
@@ -17,6 +21,7 @@ The baseline is assembly-like IR semantics, not high-level language semantics.
 6. x86-64 SysV binding points against that interface.
 7. Minimal executable proof slice that validates the wiring and contracts.
 8. M0-M2 milestones and acceptance criteria.
+9. Data Oriented Design (DOD) principles used to evaluate architecture decisions.
 
 ## Out of Scope
 1. Frontend parser design and high-level language semantics.

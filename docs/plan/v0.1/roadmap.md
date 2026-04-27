@@ -48,9 +48,12 @@ This step defines v0.1 scope boundaries and canonical language used by all downs
 **Deliverables**
 1. TI-IR entities and structural model specification.
 2. Storage contract covering layout, access, mutation, and serialization boundaries.
+3. [Data Oriented Design Principles](data-oriented-design-principles.md) for architectural evaluation.
+4. TI-IR serialization boundary C API contract.
 
 **Discussion**
 Use this section to settle data model trade-offs before defining stricter invariants.
+Apply the DOD principles document as the default rubric for storage and API decisions.
 
 ### Step 3: SSA Invariants and Validation Rules
 
