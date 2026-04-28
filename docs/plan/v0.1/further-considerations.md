@@ -2,11 +2,24 @@
 
 This document tracks open planning questions that are not yet fully locked but still influence v0.1 execution.
 
+## Authority Boundary
+
+This document is the source of truth for unresolved/open planning items only.
+Accepted outcomes should be moved into [Decisions](decisions.md) and removed from here.
+Normative scope and gates should not be defined here.
+
 ## Top-Level List
 
 1. Decide whether the proof slice should be CLI-driven or library-test-driven as the canonical demonstration path.
 2. Decide the minimum canonical fixture corpus required to prove deterministic TI-IR round-trip behavior.
 3. Decide whether emitter normalization rules (whitespace/order/style) must be strict or policy-driven for v0.1 acceptance.
+
+## Promotion Rule
+
+When an item is resolved:
+1. Record the accepted choice in [Decisions](decisions.md).
+2. Update any impacted scope/step/gate docs.
+3. Remove or mark the item resolved in this document.
 
 ## Discussion
 

@@ -1,10 +1,17 @@
 # Roadmap
 
+## Authority Boundary
+
+This document is the source of truth for step sequencing, per-step status, and deliverables.
+Scope boundaries are owned by [Charter](charter.md).
+Accepted choice rationale is owned by [Decisions](decisions.md).
+Pass/fail gate criteria are owned by [Exit-Gate Checks](exit-gate-checks.md).
+
 ## Steps
 
-Scope lock for v0.1:
-- v0.1 is restricted to TI-IR EBNF assembly round-trip (parse and emit) as the executable proof slice.
-- Broader compiler-pipeline, SSA, lowering, pass-manager, and backend-target work is deferred beyond v0.1.
+Scope reference:
+- v0.1 scope is defined in [Charter](charter.md).
+- Deferrals and refinements are tracked in [Decisions](decisions.md).
 
 1. Finalize v0.1 charter and terminology in top-level docs: explicitly scope Pluto to backend/compiler 
    semantics and exclude frontend/high-level language semantics. This is the baseline guardrail for all subsequent sections.
@@ -36,6 +43,7 @@ Scope lock for v0.1:
 1. [Charter](charter.md)
 2. [Terminology](terminology.md)
 3. [Exit-Gate Checks](exit-gate-checks.md)
+4. [Plan Overview](../../plan.md) ownership/deconfliction map
 
 **Discussion**
 This step defines v0.1 scope boundaries and canonical language used by all downstream documents.
@@ -129,3 +137,10 @@ Record exact scope limits so this remains an assembly round-trip artifact, not a
 
 **Discussion**
 Use this section to finalize objective readiness criteria for v0.1 closure.
+
+## Cross-Doc Consistency Rules
+
+1. Step statuses are updated only in this roadmap.
+2. Status labels used here follow [Status Vocabulary](terminology.md).
+3. If a step implies a scope change, update [Charter](charter.md) and record the decision in [Decisions](decisions.md).
+4. Exit-gate wording here should summarize only; normative checks live in [Exit-Gate Checks](exit-gate-checks.md).

@@ -1,5 +1,12 @@
 # Pluto v0.1 Terminology
 
+## Authority Boundary
+
+This document is the source of truth for term definitions and usage rules.
+It does not set scope boundaries, decision outcomes, or acceptance criteria.
+It defines the meaning of status vocabulary used by planning documents.
+Terms may include deferred concepts; deferment status is owned by [Charter](charter.md), [Roadmap](roadmap.md), and [Decisions](decisions.md).
+
 ## Canonical Terms
 
 ### Backend Semantics
@@ -63,6 +70,24 @@ A concrete implementation of target abstraction for the x86-64 System V ABI.
 A narrow runnable artifact that proves end-to-end contract wiring for v0.1.
 It is designed for correctness and integration validation, not performance or feature completeness.
 
+## Status Vocabulary
+
+### Done
+
+Work is complete for v0.1 and accepted for its owning document domain.
+
+### In-Progress
+
+Work is actively being executed and is not yet accepted as complete.
+
+### Deferred (Out-of-Scope for v0.1)
+
+Work is intentionally postponed and excluded from v0.1 completion requirements.
+
+### Open
+
+Question or choice is unresolved and awaiting a recorded decision.
+
 ## Terminology Rules
 
 1. Use TI-IR and TS-IR exactly with hyphen and capitalization as shown.
@@ -70,3 +95,4 @@ It is designed for correctness and integration validation, not performance or fe
 3. Use backend semantics to distinguish from frontend language semantics.
 4. Use contract when a rule has explicit preconditions, postconditions, and failure behavior.
 5. Use proof slice only for the minimal v0.1 executable demonstration.
+6. Use status terms (`Done`, `In-Progress`, `Deferred (Out-of-Scope for v0.1)`, `Open`) according to the definitions above.

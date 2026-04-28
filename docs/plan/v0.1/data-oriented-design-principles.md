@@ -2,13 +2,18 @@
 
 This document defines how Pluto evaluates architecture decisions during v0.1, especially for TI-IR model/storage and pass data flow.
 
+## Authority Boundary
+
+This document is the source of truth for architecture-evaluation rubric only.
+It does not define scope boundaries, milestones, or acceptance gates.
+
 ## Scope
 
 These principles apply to:
 
 1. TI-IR in-memory representation.
 2. TI-IR mutation/access APIs.
-3. Verifier and pass-manager data paths.
+3. TI-IR parser/emitter data paths used in the v0.1 proof slice.
 4. TI-IR serialization boundary design.
 
 ## Core Principles
@@ -55,3 +60,10 @@ Use this checklist for architecture decisions:
 1. Keep design choices simple and explicit.
 2. Avoid premature optimization that increases conceptual complexity without measurable benefit.
 3. Record unresolved alternatives as deferred items linked to roadmap milestones.
+
+## Cross-Doc References
+
+1. Scope ownership: [Charter](charter.md)
+2. Sequencing ownership: [Roadmap](roadmap.md)
+3. Decision ownership: [Decisions](decisions.md)
+4. Gate ownership: [Exit-Gate Checks](exit-gate-checks.md)

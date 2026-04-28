@@ -1,5 +1,12 @@
 # Pluto v0.1 Charter
 
+## Authority Boundary
+
+This document is the source of truth for v0.1 objective, scope boundaries, implementation baseline, release form, and audience.
+Step sequencing belongs in [Roadmap](roadmap.md).
+Accepted rationale-bearing choices belong in [Decisions](decisions.md).
+Exit pass/fail checks belong in [Exit-Gate Checks](exit-gate-checks.md).
+
 ## Purpose
 
 Pluto is a target-independent backend framework for code generation, optimization, and analysis.
@@ -20,24 +27,30 @@ The baseline is assembly-like TI-IR text semantics, not high-level language sema
 1. TI-IR model and storage contracts.
 2. TI-IR EBNF grammar specification.
 3. TI-IR domain semantics specifications.
-4. Minimal executable proof slice for deterministic TI-IR assembly round-trip (`parse -> emit`).
-5. M0 acceptance criteria for the round-trip slice and deferred-items tracking.
-6. Data Oriented Design (DOD) principles used to evaluate architecture decisions.
+4. TI-IR Parser Specification
+5. Minimal executable proof slice for deterministic TI-IR assembly round-trip (`parse -> emit`).
+6. M0 acceptance criteria for the round-trip slice and deferred-items tracking.
+7. Data Oriented Design (DOD) principles used to evaluate architecture decisions.
 
 ## Out of Scope
 
-1. Frontend parser design and high-level language semantics.
-2. SSA invariants, dominance/phi legality, and verifier-pass workflow.
-3. TI-IR to TS-IR lowering contracts.
-4. Pass-manager architecture and analysis invalidation workflow.
-5. Backend target abstraction and x86-64 SysV binding.
-6. C API deliverable at the TI-IR serialization boundary.
-7. Full object emission/linker parity.
+1. SSA invariants, dominance/phi legality, and verifier-pass workflow.
+2. TI-IR to TS-IR lowering contracts.
+3. Pass-manager architecture and analysis invalidation workflow.
+4. Backend target abstraction and x86-64 SysV binding.
+5. C API deliverable at the TI-IR serialization boundary.
+6. Full object emission/linker parity.
 
 ## Release Form
 
 v0.1 is specification-first and includes one minimal executable proof slice.
 The proof slice demonstrates deterministic TI-IR assembly round-trip, not full verifier or backend readiness.
+
+## Alignment Notes
+
+1. Scope details here are normative; roadmap items must not expand scope beyond this charter.
+2. Decision IDs in [Decisions](decisions.md) should reference and preserve these scope boundaries.
+3. Exit checks in [Exit-Gate Checks](exit-gate-checks.md) should validate this charter directly.
 
 ## Exit Criteria
 
