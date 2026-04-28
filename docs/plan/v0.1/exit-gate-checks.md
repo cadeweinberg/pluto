@@ -11,10 +11,10 @@ Every v0.1 in-scope artifact has a named section in docs and at least one accept
 Frontend and high-level language semantics remain explicitly out of scope in all v0.1 planning docs.
 
 3. Contract check
-TI-IR invariants, verifier rules, pass invalidation semantics, and target abstraction terms are internally consistent across docs.
+TI-IR EBNF grammar and domain semantics are internally consistent across docs and aligned to the locked v0.1 opcode/scope set.
 
 4. Proof-slice check
-Minimal executable proof-slice requirements are testable and explicit, including expected verifier behavior and target-interface interaction.
+Minimal executable proof-slice requirements are testable and explicit, including deterministic TI-IR assembly round-trip (`parse -> emit`).
 
 5. Exit-gate check
 v0.1 completion requires docs completeness plus the agreed minimal executable proof slice, with deferred work tracked outside v0.1.

@@ -2,30 +2,28 @@
 
 ## Steps
 
+Scope lock for v0.1:
+- v0.1 is restricted to TI-IR EBNF assembly round-trip (parse and emit) as the executable proof slice.
+- Broader compiler-pipeline, SSA, lowering, pass-manager, and backend-target work is deferred beyond v0.1.
+
 1. Finalize v0.1 charter and terminology in top-level docs: explicitly scope Pluto to backend/compiler 
    semantics and exclude frontend/high-level language semantics. This is the baseline guardrail for all subsequent sections.
 
 2. Define TI-IR model and storage contract: instruction/value/block/function entities, ownership/lifetime model,
-   table-centric storage layout decision, mutation/access semantics, and serialization boundaries.
+   table-centric storage layout decision, and mutation/access semantics. (C serialization API is out of scope for v0.1.)
 
-3. Specify SSA invariants and validation rules for TI-IR: single-definition constraints, def-use correctness, 
-   dominance/phi placement requirements, type/operand consistency checks, and canonical verifier diagnostics schema.
+3. Specify SSA invariants and validation rules for TI-IR. **Deferred (Out-of-Scope for v0.1)**
 
-4. Define explicit TI-IR to TS-IR contract: transformation boundary, preserved vs lowered invariants, 
-   legal forms at each stage, and failure modes when lowering preconditions are not met. (Depends on steps 2 and 3.)
+4. Define explicit TI-IR to TS-IR contract. **Deferred (Out-of-Scope for v0.1)**
 
-5. Define pass architecture with verification as first-class workflow: pass interfaces, pass manager responsibilities,
-   analysis invalidation policy, verifier pass entry points, and verification checkpoints between stages. (Depends on steps 3 and 4.)
+5. Define pass architecture with verification as first-class workflow. **Deferred (Out-of-Scope for v0.1)**
 
-6. Define abstract backend target interface and x86-64 SysV binding: target capability traits, 
-   register/calling convention abstraction points, legal instruction constraints, and mapping contract
-   for an x86-64 SysV backend plug-in. (Depends on steps 4 and 5.)
+6. Define abstract backend target interface and x86-64 SysV binding. **Deferred (Out-of-Scope for v0.1)**
 
-7. Add minimal executable proof slice for v0.1 exit: a tiny end-to-end skeleton that loads or constructs a toy TI-IR unit, 
-   runs verifier API hooks, and exercises target-interface plumbing for x86-64 SysV without requiring full codegen quality.
+7. Add minimal executable proof slice for v0.1 exit: parse TI-IR assembly text using the v0.1 EBNF grammar and emit TI-IR assembly text back out,
+   with deterministic round-trip behavior for the accepted v0.1 forms.
 
-8. Add milestone and acceptance gating (M0-M2): M0 (IR + invariants), M1 (pipeline + contracts), M2 (target abstraction + proof slice),
-   with explicit pass/fail criteria and deferred-items log.
+8. Add milestone and acceptance gating for v0.1: M0 (EBNF round-trip slice), with explicit pass/fail criteria and deferred-items log.
 
 ## Step Deliverables and Discussion
 
@@ -43,21 +41,23 @@ This step defines v0.1 scope boundaries and canonical language used by all downs
 
 ### Step 2: TI-IR Model and Storage Contract
 
-**Status**: Not Started
+**Status**: In-Progress
 
 **Deliverables**
-1. TI-IR entities and structural model specification.
-2. Storage contract covering layout, access, mutation, and serialization boundaries.
-3. [Data Oriented Design Principles](data-oriented-design-principles.md) for architectural evaluation.
-4. TI-IR serialization boundary C API contract.
+1. TI-IR entities and structural model specification. **Status**: In-Progress
+2. Storage contract covering layout, access, mutation, and TI-IR text assembly serialization boundaries. **Status**: In-Progress
+3. TI-IR EBNF grammar specification. **Status**: In-Progress
+4. Domain semantics specifications for each TI-IR language domain. **Status**: In-Progress
+5. [Data Oriented Design Principles](data-oriented-design-principles.md) for architectural evaluation. **Status**: Done
+6. TI-IR serialization boundary C API contract. **Status**: Out-of-Scope (v0.1)
 
 **Discussion**
-Use this section to settle data model trade-offs before defining stricter invariants.
+Use this section to settle data model trade-offs for the v0.1 round-trip slice.
 Apply the DOD principles document as the default rubric for storage and API decisions.
 
 ### Step 3: SSA Invariants and Validation Rules
 
-**Status**: Not Started
+**Status**: Out-of-Scope (v0.1)
 
 **Deliverables**
 1. Formal SSA invariants for TI-IR.
@@ -68,7 +68,7 @@ Use this section to resolve ambiguity around dominance, phi legality, and type c
 
 ### Step 4: TI-IR to TS-IR Contract
 
-**Status**: Not Started
+**Status**: Out-of-Scope (v0.1)
 
 **Deliverables**
 1. Stage boundary contract with preconditions and postconditions.
@@ -79,7 +79,7 @@ This section should record which invariants are preserved vs transformed across 
 
 ### Step 5: Pass Architecture and Verification Workflow
 
-**Status**: Not Started
+**Status**: Out-of-Scope (v0.1)
 
 **Deliverables**
 1. Pass and pass-manager interface contracts.
@@ -90,7 +90,7 @@ Capture pipeline-order constraints and where verification must be mandatory.
 
 ### Step 6: Target Abstraction and x86-64 SysV Binding
 
-**Status**: Not Started
+**Status**: Out-of-Scope (v0.1)
 
 **Deliverables**
 1. Abstract target capability interface.
@@ -101,21 +101,22 @@ Use this section to keep target-specific details isolated from target-independen
 
 ### Step 7: Minimal Executable Proof Slice
 
-**Status**: Not Started
+**Status**: In-Progress
 
 **Deliverables**
-1. Minimal runnable slice exercising TI-IR, verifier hooks, and target-interface plumbing.
-2. Proof-slice success criteria aligned with v0.1 exit checks.
+1. Minimal runnable TI-IR assembly parser for the v0.1 EBNF grammar.
+2. Deterministic TI-IR assembly emitter for accepted v0.1 forms.
+3. Round-trip proof tests (`parse -> emit`) aligned with v0.1 exit checks.
 
 **Discussion**
-Record exact scope limits so this stays a contract-validation artifact, not a production prototype.
+Record exact scope limits so this remains an assembly round-trip artifact, not a full verifier or backend prototype.
 
 ### Step 8: Milestones and Acceptance Gating
 
-**Status**: Not Started
+**Status**: In-Progress
 
 **Deliverables**
-1. M0-M2 milestone definitions with pass/fail criteria.
+1. M0 definition for EBNF round-trip proof slice with pass/fail criteria.
 2. Deferred-items log and explicit out-of-scope carryover list.
 
 **Discussion**

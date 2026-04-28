@@ -2,44 +2,43 @@
 
 ## Purpose
 Pluto is a target-independent backend framework for code generation, optimization, and analysis.
-v0.1 establishes the architecture and contracts needed to implement the backend safely and consistently.
+v0.1 establishes the minimum specification and executable slice needed to prove TI-IR assembly round-trip behavior.
 
 ## v0.1 Objective
-Define a stable, implementation-ready foundation for backend semantics and interfaces.
-The baseline is assembly-like IR semantics, not high-level language semantics.
+Deliver a deterministic TI-IR EBNF assembly round-trip slice (`parse -> emit`).
+The baseline is assembly-like TI-IR text semantics, not high-level language semantics.
 
 ## Implementation Baseline
 1. Core implementation language: C++20.
-2. C API deliverable: TI-IR serialization boundary API for stable external integration.
+2. C API boundary is deferred and out of scope for v0.1.
 
 ## In Scope
 1. TI-IR model and storage contracts.
-2. SSA invariants and validation rules.
-3. TI-IR to TS-IR boundary contract.
-4. Pass architecture with verifier-first workflow.
-5. Abstract backend target interface.
-6. x86-64 SysV binding points against that interface.
-7. Minimal executable proof slice that validates the wiring and contracts.
-8. M0-M2 milestones and acceptance criteria.
-9. Data Oriented Design (DOD) principles used to evaluate architecture decisions.
+2. TI-IR EBNF grammar specification.
+3. TI-IR domain semantics specifications.
+4. Minimal executable proof slice for deterministic TI-IR assembly round-trip (`parse -> emit`).
+5. M0 acceptance criteria for the round-trip slice and deferred-items tracking.
+6. Data Oriented Design (DOD) principles used to evaluate architecture decisions.
 
 ## Out of Scope
 1. Frontend parser design and high-level language semantics.
-2. Broad optimization catalog beyond what is needed to define contracts.
-3. Advanced register allocation strategies (for example graph coloring).
-4. Full object emission/linker parity.
-5. Multi-target delivery beyond x86-64 SysV.
+2. SSA invariants, dominance/phi legality, and verifier-pass workflow.
+3. TI-IR to TS-IR lowering contracts.
+4. Pass-manager architecture and analysis invalidation workflow.
+5. Backend target abstraction and x86-64 SysV binding.
+6. C API deliverable at the TI-IR serialization boundary.
+7. Full object emission/linker parity.
 
 ## Release Form
 v0.1 is specification-first and includes one minimal executable proof slice.
-The proof slice demonstrates contract viability, not production-quality code generation.
+The proof slice demonstrates deterministic TI-IR assembly round-trip, not full verifier or backend readiness.
 
 ## Exit Criteria
-1. Contract and invariant docs are complete and internally consistent.
+1. Grammar, domain semantics, and storage-contract docs are complete and internally consistent.
 2. Scope boundaries are explicitly documented and enforced.
-3. Minimal proof slice runs and demonstrates verifier and target-interface integration.
+3. Minimal proof slice runs and demonstrates deterministic TI-IR assembly round-trip (`parse -> emit`).
 4. Deferred work is tracked outside v0.1 scope.
 
 ## Audience
-1. Backend implementers building TI-IR, TS-IR, and pass infrastructure.
-2. Reviewers validating architectural consistency and scope discipline.
+1. Implementers building TI-IR text parser/emitter infrastructure for v0.1.
+2. Reviewers validating scope discipline, grammar completeness, and round-trip determinism.
