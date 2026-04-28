@@ -73,17 +73,19 @@ meta_decl       = ident, [ string_literal ], ";" ;
 ```
 
 Semantics:
+
 - File metadata declarations are key-value or flag entries at file scope.
 - Detailed per-key semantics are specified in [Metadata Declarations](meta-decls.md).
 
 ### 2. Declaration Metadata Attachment Form
 
 ```ebnf
-decl_meta_list  = "[", meta_decl, { meta_decl }, "]" ;
+{ meta_decl } ;
 ```
 
 Semantics:
-- `decl_meta_list` attaches one or more metadata entries to a single declaration.
+
+- attaches one or more metadata entries to a single declaration.
 - Metadata attachment is supported for `type_decl`, `const_decl`, and `function_decl`.
 - Detailed metadata semantics are specified in [Metadata Declarations](meta-decls.md).
 
@@ -95,6 +97,7 @@ module_decl    = type_decl | const_decl | function_decl ;
 ```
 
 Semantics:
+
 - Module form semantics are specified in [Module Semantics](modules.md).
 
 ### 4. Type Declaration Form
@@ -104,6 +107,7 @@ type_decl      = [ decl_meta_list ], "type", ident, "=", type_expr, ";" ;
 ```
 
 Semantics:
+
 - Type declaration semantics are specified in [Type Semantics](types.md).
 
 ### 5. Constant Declaration Form
@@ -113,6 +117,7 @@ const_decl     = [ decl_meta_list ], "const", ident, ":", type_expr, "=", litera
 ```
 
 Semantics:
+
 - Constant semantics are specified in [Constant Semantics](constants.md).
 
 ### 6. Function Form
@@ -125,6 +130,7 @@ param          = ident, ":", type_expr ;
 ```
 
 Semantics:
+
 - Function semantics are specified in [Function Semantics](functions.md).
 
 ### 7. Block Form
@@ -134,6 +140,7 @@ block_decl     = ident, ":", { inst_decl } ;
 ```
 
 Semantics:
+
 - Basic block semantics are specified in [Basic Block Semantics](basic-blocks.md).
 
 ### 8. Instruction Form
@@ -145,6 +152,7 @@ operand        = name | literal ;
 ```
 
 Semantics:
+
 - Instruction semantics are specified in [Instruction Semantics](instructions.md).
 
 ### 9. Name Form
@@ -155,6 +163,7 @@ ident          = letter, { letter | digit | "_" } ;
 ```
 
 Semantics:
+
 - Name semantics are specified in [Name Semantics](names.md).
 
 
@@ -172,6 +181,7 @@ primitive_type = "i8" | "i16" | "i32" | "i64"
 ```
 
 Semantics:
+
 - Type expression semantics are specified in [Type Semantics](types.md).
 
 ### 11. Literal Form
@@ -184,11 +194,12 @@ integral_literal         = digit, { digit } ;
 ```
 
 Semantics:
+
 - Literal semantics are specified in [Literal Semantics](literals.md).
 
 ## Example: Straight-Line Function
 
-```
+```asm
 format "ti-ir";
 version 0.1;
 
@@ -209,6 +220,7 @@ entry:
 ```
 
 Notes on this example:
+
 - Global declarations use symbolic names (`one`, `two`, `add_and_double`) rather than exposed stable IDs.
 - Named parameters (`x`, `y`) and named instruction results (`sum`, `biased`) are referenced directly by name.
 - `entry:` introduces a block, and the block body runs until the next block header or the end of the enclosing function.
@@ -216,12 +228,13 @@ Notes on this example:
 - `ret` is a terminator with no result binding and no `:` annotation — `@0`'s type is already known from its definition.
 
 Opcode set note for v0.1:
+
 - Valid opcodes are `add`, `sub`, `mul`, `div`, `mod`, and `ret`.
 - More complex control-flow and interprocedural opcodes (for example `br`, `phi`, and `call`) are out of scope.
 
 ## Example: Type Alias Composition
 
-```
+```asm
 format "ti-ir";
 version 0.1;
 
@@ -239,6 +252,7 @@ entry:
 ```
 
 Notes on this example:
+
 - `i32_word` aliases a primitive type (`i32`) and is reused in declarations and instruction result typing.
 - The function signature and instruction result type use symbolic type names directly in type positions.
 - Value names (`left`, `right`, `sum`, `biased`) are direct SSA bindings in the source text.
