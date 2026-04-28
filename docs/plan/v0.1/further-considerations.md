@@ -11,13 +11,16 @@ This document tracks open planning questions that are not yet fully locked but s
 ## Discussion
 
 ### Proof Slice Delivery Path
+
 Current direction: test-library driven.
 Next action: choose the test library and define the minimal harness shape.
 
 ### Round-Trip Fixture Corpus
+
 Current direction: keep fixtures small and focused on accepted v0.1 opcode and form coverage.
 Next action: lock a minimal corpus list and expected emitted outputs.
 
 ### Emitter Normalization Rules
+
 Current direction: deterministic output is required, but formatting strictness is still open.
 Next action: define canonicalization requirements for v0.1 exit-gate checks.
