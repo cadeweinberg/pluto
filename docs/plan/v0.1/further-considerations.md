@@ -17,6 +17,7 @@ Normative scope and gates should not be defined here.
 ## Promotion Rule
 
 When an item is resolved:
+
 1. Record the accepted choice in [Decisions](decisions.md).
 2. Update any impacted scope/step/gate docs.
 3. Remove or mark the item resolved in this document.

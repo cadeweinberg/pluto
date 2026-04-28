@@ -14,67 +14,81 @@ Open unresolved questions belong in [Further Considerations](further-considerati
 ### D-001: Scope Lock to EBNF Round-Trip Slice
 
 Decision:
+
 - v0.1 is scoped to deterministic TI-IR text grammar parse/emit round-trip behavior.
 
 Implications:
+
 - v0.1 artifacts optimize for grammar + semantics clarity, not full compiler pipeline completeness.
 - Exit criteria must validate deterministic round-trip and scope discipline.
 
 ### D-002: Minimal Opcode Surface for v0.1
 
 Decision:
+
 - Accepted opcode set for v0.1 is `add`, `sub`, `mul`, `div`, `mod`, `ret`.
 
 Implications:
+
 - `ret` is the only in-scope terminator opcode.
 - Control-flow/interprocedural opcodes (`br`, `phi`, `call`, etc.) are explicitly out of scope for v0.1.
 
 ### D-003: Module Concept Reduced to Symbol Visibility Boundary
 
 Decision:
+
 - Module semantics in v0.1 define symbol visibility boundaries only.
 - Module semantics do not own type/function/constant behavior contracts.
 
 Implications:
+
 - Declaration-specific semantics remain in domain docs (`types.md`, `constants.md`, `functions.md`).
 - Import/export rules govern cross-boundary symbol visibility.
 
 ### D-004: No Qualified Name Syntax in v0.1
 
 Decision:
+
 - Name references are unqualified in v0.1 text syntax.
 - Dotted qualification syntax is invalid.
 
 Implications:
+
 - Name grammar is restricted to `ident` and `@N` temporary forms.
 - Cross-module visibility is policy/metadata-driven rather than text-level qualified addressing.
 
 ### D-005: Reused Metadata Form with Optional Value
 
 Decision:
+
 - Metadata entries use `meta_decl = ident, [ string_literal ], ";"`.
 - Omitted value denotes flag-style metadata.
 
 Implications:
+
 - File metadata can represent both key-value and key-only flags.
 - Metadata parser path is shared between file-level and declaration-attached metadata.
 
 ### D-006: Declaration-Attached Metadata for Type/Const/Fn
 
 Decision:
+
 - v0.1 supports declaration-attached metadata lists for `type_decl`, `const_decl`, and `function_decl`.
 - Attachment form is `decl_meta_list` and applies to exactly one following declaration.
 
 Implications:
+
 - Per-declaration annotations are available without adding new declaration kinds.
 - Key collisions inside one attachment list are validation errors unless a key rule defines merge behavior.
 
 ### D-007: Single Source of Truth by Spec Domain
 
 Decision:
+
 - Grammar and semantic ownership is split across domain documents with cross-cutting links.
 
 Implications:
+
 - Grammar remains centralized in TI-IR grammar doc.
 - Domain semantics remain localized (module, names, import/export, instructions, etc.) to reduce drift.
 

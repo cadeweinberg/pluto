@@ -74,15 +74,15 @@ It is designed for correctness and integration validation, not performance or fe
 
 ### Done
 
-Work is complete for v0.1 and accepted for its owning document domain.
+Work is complete and accepted for its owning document domain.
 
 ### In-Progress
 
 Work is actively being executed and is not yet accepted as complete.
 
-### Deferred (Out-of-Scope for v0.1)
+### Deferred 
 
-Work is intentionally postponed and excluded from v0.1 completion requirements.
+Work is intentionally postponed and excluded from completion requirements.
 
 ### Open
 
