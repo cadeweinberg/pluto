@@ -4,7 +4,7 @@
 
 #include "adt/string_interner.hpp"
 
-TEST_CASE("StringInterner can intern strings", "[StringInterner]") {
+TEST_CASE("StringInterner", "[StringInterner, ADT]") {
     pluto::StringInterner interner;
     std::vector<pluto::StringInterner::StringId> ids;
     ids.push_back(interner.intern("hello"));

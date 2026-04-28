@@ -5,7 +5,7 @@
 
 #include "adt/flat_map.hpp"
 
-TEST_CASE("FlatMap can insert and retrieve values", "[FlatMap]") {
+TEST_CASE("FlatMap", "[FlatMap, ADT]") {
     pluto::FlatMap<int, std::string> map;
 
     std::vector<std::pair<int, std::string>> entries;

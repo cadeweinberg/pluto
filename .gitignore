@@ -61,3 +61,6 @@ cmake-build-*/
 # VsCode files
 .vscode/
 .continue
+
+# generated files
+src/frontend/lexer.cpp
