@@ -24,15 +24,15 @@ Scope: Text serialization grammar for TI-IR v0.1.
 
 ```ebnf
 file            = { meta_decl }, module ;
-meta_decl       = ident, string_literal, ";" ;
+meta_decl       = ident, [ literal ], ";" ;
 
 module         = "module", ident, "{" { module_decl } "}" ;
 module_decl    = type_decl | const_decl | function_decl ;
 
-type_decl      = "type", ident, "=", type_expr, ";" ;
-const_decl     = "const", ident, ":", type_expr, "=", literal, ";" ;
+type_decl      = "type", { meta_decl }, ident, "=", type_expr, ";" ;
+const_decl     = "const", { meta_decl }, ident, ":", type_expr, "=", literal, ";" ;
 
-function_decl  = "fn", ident, function_sig, "{", { block_decl }, "}" ;
+function_decl  = "fn", { meta_decl }, ident, function_sig, "{", { block_decl }, "}" ;
 function_sig   = "(", [ param_list ], ")", "->", type_expr ;
 param_list     = param, { ",", param } ;
 param          = ident, ":", type_expr ;
@@ -69,14 +69,25 @@ integral_literal   = digit, { digit } ;
 
 ```ebnf
 file            = { meta_decl }, module ;
-meta_decl       = ident, string_literal, ";" ;
+meta_decl       = ident, [ string_literal ], ";" ;
 ```
 
 Semantics:
-- File metadata declarations are key-value entries at file scope.
+- File metadata declarations are key-value or flag entries at file scope.
 - Detailed per-key semantics are specified in [Metadata Declarations](meta-decls.md).
 
-### 2. Module Form
+### 2. Declaration Metadata Attachment Form
+
+```ebnf
+decl_meta_list  = "[", meta_decl, { meta_decl }, "]" ;
+```
+
+Semantics:
+- `decl_meta_list` attaches one or more metadata entries to a single declaration.
+- Metadata attachment is supported for `type_decl`, `const_decl`, and `function_decl`.
+- Detailed metadata semantics are specified in [Metadata Declarations](meta-decls.md).
+
+### 3. Module Form
 
 ```ebnf
 module         = "module", ident, "{" { module_decl } "}" ;
@@ -86,28 +97,28 @@ module_decl    = type_decl | const_decl | function_decl ;
 Semantics:
 - Module form semantics are specified in [Module Semantics](modules.md).
 
-### 3. Type Declaration Form
+### 4. Type Declaration Form
 
 ```ebnf
-type_decl      = "type", ident, "=", type_expr, ";" ;
+type_decl      = [ decl_meta_list ], "type", ident, "=", type_expr, ";" ;
 ```
 
 Semantics:
 - Type declaration semantics are specified in [Type Semantics](types.md).
 
-### 4. Constant Declaration Form
+### 5. Constant Declaration Form
 
 ```ebnf
-const_decl     = "const", ident, ":", type_expr, "=", literal, ";" ;
+const_decl     = [ decl_meta_list ], "const", ident, ":", type_expr, "=", literal, ";" ;
 ```
 
 Semantics:
 - Constant semantics are specified in [Constant Semantics](constants.md).
 
-### 5. Function Form
+### 6. Function Form
 
 ```ebnf
-function_decl  = "fn", ident, function_sig, "{", { block_decl }, "}" ;
+function_decl  = [ decl_meta_list ], "fn", ident, function_sig, "{", { block_decl }, "}" ;
 function_sig   = "(", [ param_list ], ")", "->", type_expr ;
 param_list     = param, { ",", param } ;
 param          = ident, ":", type_expr ;
@@ -116,7 +127,7 @@ param          = ident, ":", type_expr ;
 Semantics:
 - Function semantics are specified in [Function Semantics](functions.md).
 
-### 6. Block Form
+### 7. Block Form
 
 ```ebnf
 block_decl     = ident, ":", { inst_decl } ;
@@ -125,7 +136,7 @@ block_decl     = ident, ":", { inst_decl } ;
 Semantics:
 - Basic block semantics are specified in [Basic Block Semantics](basic-blocks.md).
 
-### 7. Instruction Form
+### 8. Instruction Form
 
 ```ebnf
 inst_decl      = [ result_pattern, ":", type_expr, "=" ], opcode, operand_list, ";" ;
@@ -136,7 +147,7 @@ operand        = name | literal ;
 Semantics:
 - Instruction semantics are specified in [Instruction Semantics](instructions.md).
 
-### 8. Name Form
+### 9. Name Form
 
 ```ebnf
 name           = ident | "@", integral_literal ;
@@ -147,7 +158,7 @@ Semantics:
 - Name semantics are specified in [Name Semantics](names.md).
 
 
-### 9. Type Expression Form
+### 10. Type Expression Form
 
 ```ebnf
 type_expr      = tuple_type | struct_type | name | primitive_type ;
@@ -163,7 +174,7 @@ primitive_type = "i8" | "i16" | "i32" | "i64"
 Semantics:
 - Type expression semantics are specified in [Type Semantics](types.md).
 
-### 10. Literal Form
+### 11. Literal Form
 
 ```ebnf
 literal        = tuple_literal | scalar_literal ;
@@ -183,9 +194,11 @@ version 0.1;
 
 module example;
 
+[doc "bias constant"; internal;]
 const one: i32 = 1;
 const two: i32 = 2;
 
+[doc "adds and doubles";]
 fn add_and_double(x: i32, y: i32) -> i32 {
 entry:
    sum: i32 = add x, y;    (* named params referenced by name *)

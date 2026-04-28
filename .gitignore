@@ -57,3 +57,7 @@ dkms.conf
 # Build directories
 build/
 cmake-build-*/
+
+# VsCode files
+.vscode/
+.continue

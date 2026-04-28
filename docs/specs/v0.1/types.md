@@ -6,7 +6,7 @@ Scope: Semantics for type declarations and type expressions in TI-IR text files.
 ## Grammar
 
 ```ebnf
-type_decl      = "type", ident, "=", type_expr, ";" ;
+type_decl      = "type", { meta_decl }, ident, "=", type_expr, ";" ;
 
 type_expr      = tuple_type | struct_type | name | primitive_type ;
 tuple_type     = "(", type_expr, ",", type_expr, { ",", type_expr }, ")" ;
@@ -23,6 +23,7 @@ primitive_type = "i8" | "i16" | "i32" | "i64"
 ### Type Declarations
 
 - `type` introduces a symbolic alias bound to a `type_expr`.
+- metadata entries may be attached to a type declaration.
 
 ### Type Expressions
 

@@ -5,6 +5,7 @@ This document defines how Pluto evaluates architecture decisions during v0.1, es
 ## Scope
 
 These principles apply to:
+
 1. TI-IR in-memory representation.
 2. TI-IR mutation/access APIs.
 3. Verifier and pass-manager data paths.
@@ -39,6 +40,7 @@ When design options are unclear, capture simple measurements and expected comple
 ## Decision Rubric
 
 Use this checklist for architecture decisions:
+
 1. What access pattern is dominant (scan, random lookup, grouped traversal)?
 2. What data is hot vs cold?
 3. What mutation frequency is expected?

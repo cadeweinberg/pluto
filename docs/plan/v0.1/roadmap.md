@@ -32,6 +32,7 @@ Scope lock for v0.1:
 **Status**: Done
 
 **Deliverables**
+
 1. [Charter](charter.md)
 2. [Terminology](terminology.md)
 3. [Exit-Gate Checks](exit-gate-checks.md)
@@ -44,6 +45,7 @@ This step defines v0.1 scope boundaries and canonical language used by all downs
 **Status**: In-Progress
 
 **Deliverables**
+
 1. TI-IR entities and structural model specification. **Status**: In-Progress
 2. Storage contract covering layout, access, mutation, and TI-IR text assembly serialization boundaries. **Status**: In-Progress
 3. TI-IR EBNF grammar specification. **Status**: In-Progress
@@ -60,6 +62,7 @@ Apply the DOD principles document as the default rubric for storage and API deci
 **Status**: Out-of-Scope (v0.1)
 
 **Deliverables**
+
 1. Formal SSA invariants for TI-IR.
 2. Validation rule set with deterministic diagnostic categories.
 
@@ -71,6 +74,7 @@ Use this section to resolve ambiguity around dominance, phi legality, and type c
 **Status**: Out-of-Scope (v0.1)
 
 **Deliverables**
+
 1. Stage boundary contract with preconditions and postconditions.
 2. Failure behavior for invalid lowering inputs.
 
@@ -82,6 +86,7 @@ This section should record which invariants are preserved vs transformed across 
 **Status**: Out-of-Scope (v0.1)
 
 **Deliverables**
+
 1. Pass and pass-manager interface contracts.
 2. Analysis invalidation policy and verifier checkpoint map.
 
@@ -93,6 +98,7 @@ Capture pipeline-order constraints and where verification must be mandatory.
 **Status**: Out-of-Scope (v0.1)
 
 **Deliverables**
+
 1. Abstract target capability interface.
 2. x86-64 SysV binding contract aligned to that interface.
 
@@ -104,6 +110,7 @@ Use this section to keep target-specific details isolated from target-independen
 **Status**: In-Progress
 
 **Deliverables**
+
 1. Minimal runnable TI-IR assembly parser for the v0.1 EBNF grammar.
 2. Deterministic TI-IR assembly emitter for accepted v0.1 forms.
 3. Round-trip proof tests (`parse -> emit`) aligned with v0.1 exit checks.
@@ -116,6 +123,7 @@ Record exact scope limits so this remains an assembly round-trip artifact, not a
 **Status**: In-Progress
 
 **Deliverables**
+
 1. M0 definition for EBNF round-trip proof slice with pass/fail criteria.
 2. Deferred-items log and explicit out-of-scope carryover list.
 

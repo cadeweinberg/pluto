@@ -1,19 +1,20 @@
 # TI-IR Metadata Declarations (v0.1 Draft)
 
 Status: Draft
-Scope: Semantics for file-scope `meta_decl` entries used by TI-IR text files.
+Scope: Semantics for `meta_decl` entries at file scope and declaration-attached metadata lists in TI-IR text files.
 
 ## Grammar
 
 ```ebnf
 file      = { meta_decl }, module ;
-meta_decl = ident, string_literal, ";" ;
+meta_decl = "#" ident, [ literal ], ";" ;
 ```
 
 Interpretation:
 - `ident` is the metadata key.
-- `string_literal` is the metadata value.
-- Metadata declarations are file-scope only and appear before `module`.
+- `literal` is an optional metadata value payload.
+- If the value is omitted, the entry is a flag-style metadata declaration.
+- Metadata declarations may appear at file scope and attached to `type_decl`, `const_decl`, and `function_decl`.
 
 ## Semantics
 
@@ -70,10 +71,17 @@ Notes:
 
 ### Extensibility Constraints
 
-- The grammar intentionally allows arbitrary metadata keys via `meta_decl = ident, string_literal, ";"`.
+- The grammar intentionally allows arbitrary metadata keys via `meta_decl = ident, [ string_literal ], ";"`.
 - Parsers should preserve unknown keys.
 - Semantic validation may classify unknown keys as informational, warning, or error by policy.
 - Reserved keys listed above have normative meaning in v0.1.0.
+
+### Declaration-Attached Metadata
+
+- `decl_meta_list` applies metadata to exactly one following declaration.
+- `decl_meta_list` supports only `type_decl`, `const_decl`, and `function_decl` in v0.1.
+- Declaration metadata keys are independent from file-level reserved keys unless a key specification states otherwise.
+- Key collisions inside a single `decl_meta_list` are semantic validation errors unless key-specific rules define merge behavior.
 
 ## Cross-Cutting Concerns
 

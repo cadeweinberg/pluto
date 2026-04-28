@@ -6,7 +6,7 @@ Scope: Semantics for the `import` and `export` metadata keys in file-scope `meta
 ## Grammar
 
 ```ebnf
-meta_decl = ident, string_literal, ";" ;
+meta_decl = ident, [ string_literal ], ";" ;
 ```
 
 Interpretation:

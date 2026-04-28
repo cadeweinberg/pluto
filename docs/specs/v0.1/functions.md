@@ -6,7 +6,7 @@ Scope: Semantics for function declarations and signatures in TI-IR text files.
 ## Grammar
 
 ```ebnf
-function_decl  = "fn", ident, function_sig, "{", { block_decl }, "}" ;
+function_decl  = "fn", { meta_decl }, ident, function_sig, "{", { block_decl }, "}" ;
 function_sig   = "(", [ param_list ], ")", "->", type_expr ;
 param_list     = param, { ",", param } ;
 param          = ident, ":", type_expr ;
@@ -17,6 +17,7 @@ param          = ident, ":", type_expr ;
 ### Function Declaration
 
 - `fn` introduces a callable symbol in the enclosing module visibility domain.
+- metadata entries may be attached to a function declaration.
 
 ### Signature and Return Model
 

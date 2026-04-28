@@ -16,26 +16,34 @@ This document records decisions that are currently accepted for Pluto v0.1.
 ## Discussion
 
 ### Version Label
+
 Use v0.1 consistently across planning, roadmap, and acceptance documents so scope stays clearly pre-1.0.
 
 ### Proof Slice
+
 The proof slice exists to validate deterministic TI-IR assembly round-trip behavior. It is not intended to prove verifier, lowering, or backend readiness.
 
 ### TS-IR Contract
+
 TS-IR is deferred beyond v0.1 and is not part of the v0.1 proof-slice contract.
 
 ### Verifier-First Depth
+
 Verifier and pass-manager depth are deferred beyond v0.1.
 
 ### Semantics Boundary
+
 Pluto is planning around backend and IR semantics, not source-language design.
 
 ### Implementation Language
+
 C++20 is the implementation baseline for the core system.
 This choice should not force object-heavy designs that conflict with Pluto's data-oriented architecture goals.
 
 ### C API Boundary
+
 The C API boundary remains a future deliverable and is out of scope for v0.1.
 
 ### Data Oriented Design Rubric
+
 DOD principles are part of the architecture baseline because TI-IR storage and traversal costs are central to the project design.
