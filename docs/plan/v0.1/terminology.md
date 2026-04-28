@@ -80,7 +80,7 @@ Work is complete and accepted for its owning document domain.
 
 Work is actively being executed and is not yet accepted as complete.
 
-### Deferred 
+### Deferred
 
 Work is intentionally postponed and excluded from completion requirements.
 
