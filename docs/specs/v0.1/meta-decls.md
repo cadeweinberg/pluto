@@ -84,4 +84,4 @@ Notes:
 1. Parse all `meta_decl` entries.
 2. Validate required reserved keys (`format`, `version`) and their value constraints.
 3. Resolve `import`/`export` semantics as specified in [Import Export Semantics](import-export.md).
-4. Parse and validate module-level declarations.
+4. Parse and validate declarations in the current module visibility domain.

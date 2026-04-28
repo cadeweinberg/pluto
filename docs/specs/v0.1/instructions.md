@@ -52,7 +52,7 @@ inst_decl       = [ result_pattern, ":", type_expr, "=" ], opcode, operand_list,
   - A function parameter.
   - An instruction result with SSA domination constraint.
   - An unnamed temporary defined earlier in the function.
-  - A module-scoped constant or function.
+  - A constant or function visible in the enclosing module visibility domain.
 - **Literal operands**: Treated as immediate values with inferred or contextually determined types (see [Literal Semantics](literals.md)).
 - Opcode and operand type compatibility is checked during semantic validation; operand types must match the opcode's declared operand type signature.
 - Terminators never bind result values.

@@ -16,7 +16,7 @@ param          = ident, ":", type_expr ;
 
 ### Function Declaration
 
-- `fn` introduces a callable symbol in module scope.
+- `fn` introduces a callable symbol in the enclosing module visibility domain.
 
 ### Signature and Return Model
 
@@ -27,7 +27,7 @@ param          = ident, ":", type_expr ;
 
 - Function names must be valid `ident` values.
 - Function bodies are brace-delimited and contain one or more `block_decl` entries.
-- Function declarations are ordered and participate in normal module-scope symbol resolution.
+- Function declarations are ordered and participate in normal module-visibility symbol resolution.
 - Parameters are explicitly typed via `ident ":" type_expr`.
 - Function return type is exactly one `type_expr`.
 - Multi-value returns are represented as tuple-typed single returns (for example `-> (i32, i32)`).
@@ -36,4 +36,4 @@ param          = ident, ":", type_expr ;
 
 - `block_decl` semantics govern intra-function control flow and terminator requirements.
 - `type_expr` semantics are defined in [Type Semantics](types.md).
-- Symbol visibility and module ownership are defined in [Module Semantics](modules.md).
+- Symbol visibility boundaries are defined in [Module Semantics](modules.md).

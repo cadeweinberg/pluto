@@ -11,7 +11,7 @@ const_decl = "const", ident, ":", type_expr, "=", literal, ";" ;
 
 ## Semantics
 
-- `const` introduces a module-scope constant symbol with explicit type and literal initializer.
+- `const` introduces a constant symbol in the enclosing module visibility domain with explicit type and literal initializer.
 
 ## Contract
 
@@ -24,4 +24,4 @@ const_decl = "const", ident, ":", type_expr, "=", literal, ";" ;
 
 - `type_expr` semantics are defined in [Type Semantics](types.md).
 - Literal syntax and literal typing behavior are defined in [Literal Semantics](literals.md).
-- Module visibility and symbol scope are defined in [Module Semantics](modules.md).
+- Module visibility boundaries are defined in [Module Semantics](modules.md).

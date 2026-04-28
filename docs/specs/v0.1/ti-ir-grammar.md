@@ -44,7 +44,7 @@ operand        = name | literal ;
 
 result_pattern = name | tuple_literal ;
 
-name           = ident, { ".", ident } | "@", integral_literal ;
+name           = ident | "@", integral_literal ;
 ident          = letter, { letter | digit | "_" } ;
 
 type_expr      = tuple_type | struct_type | name | primitive_type ;
@@ -139,7 +139,7 @@ Semantics:
 ### 8. Name Form
 
 ```ebnf
-name           = ident, { ".", ident } | "@", integral_literal ;
+name           = ident | "@", integral_literal ;
 ident          = letter, { letter | digit | "_" } ;
 ```
 

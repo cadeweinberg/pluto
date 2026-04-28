@@ -21,17 +21,17 @@ Authority boundary:
 
 ### import
 
-- Declares an external dependency to bring module-level symbols into resolution scope.
+- Declares an external dependency that makes imported symbols available in the current module visibility domain.
 
 Value shape:
-- Resolver-specific path or selector encoded as a string literal.
+- Resolver-specific import descriptor encoded as a string literal.
 
 ### export
 
-- Declares symbols intended to be visible outside the defining file/module boundary.
+- Declares symbols intended to be visible outside the defining module visibility boundary.
 
 Value shape:
-- Export selector encoded as a string literal.
+- Export descriptor encoded as a string literal.
 
 ## Contract
 
@@ -39,15 +39,15 @@ Value shape:
 - Import resolution policy (filesystem, package registry, virtual module map, etc.) is implementation-defined in v0.1.
 - Failed import resolution is a semantic validation error.
 - Export processing runs after local declarations are parsed and symbol tables are established.
-- Export selectors must resolve to symbols defined in or re-exported by the current compilation unit.
+- Export descriptors must resolve to symbols visible in the current module visibility domain.
 - Unresolved exports are semantic validation errors.
 
 ### Ordering and Interaction
 
 1. Parse all file-scope metadata entries.
 2. Validate required metadata keys (for example `format`, `version`).
-3. Resolve all imports and populate external symbol visibility.
-4. Parse and validate module declarations using the import-augmented scope.
+3. Resolve all imports and populate imported symbol visibility in the current module domain.
+4. Parse and validate module declarations using the import-augmented visibility scope.
 5. Validate and publish exports.
 
 ### Extensibility Constraints

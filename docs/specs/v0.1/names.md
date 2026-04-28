@@ -6,7 +6,7 @@ Scope: Syntax and semantic resolution rules for names in TI-IR text files.
 ## Grammar
 
 ```ebnf
-name           = ident, { ".", ident } | "@", integral_literal ;
+name           = ident | "@", integral_literal ;
 ident          = letter, { letter | digit | "_" } ;
 ```
 
@@ -19,12 +19,8 @@ ident          = letter, { letter | digit | "_" } ;
 
 Resolution order:
 1. Local SSA scope (parameters and instruction results).
-2. Enclosing module scope (types, constants, functions).
-3. Imported or externally qualified symbols, if applicable.
-
-### Qualified Names
-
-- Dotted names (for example `math.add`) address symbols through qualification.
+2. Enclosing module visibility domain (types, constants, functions).
+3. Imported symbols that are visible in the current module domain, if applicable.
 
 ### Unnamed Temporaries
 
@@ -36,9 +32,8 @@ Resolution order:
 
 - Resolution is lexical and deterministic.
 - If multiple symbols in the same namespace would match, resolution fails with a semantic validation error.
-- The left-most component of a qualified name identifies an owning namespace/module context.
-- Remaining components identify the symbol path within that context.
-- Unknown qualification roots or unresolved qualified paths are semantic validation errors.
+- Name references are unqualified in v0.1; dotted qualification syntax is invalid.
+- Unknown or non-visible symbol names are semantic validation errors.
 
 ### Unnamed Temporary Constraints
 
@@ -50,10 +45,9 @@ Resolution order:
 
 - `ident` begins with a letter and continues with letters, digits, or `_`.
 - Name matching is case-sensitive.
-- `.` is only a separator between name components.
 
 ## Cross-Cutting Concerns
 
 - Instruction operand and result-pattern behavior is defined in [Instruction Semantics](instructions.md).
-- Module ownership and declaration visibility are defined in [Module Semantics](modules.md).
+- Module visibility boundaries are defined in [Module Semantics](modules.md).
 - Name use in type positions is constrained by [Type Semantics](types.md).

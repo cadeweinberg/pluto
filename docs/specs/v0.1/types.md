@@ -45,14 +45,14 @@ primitive_type = "i8" | "i16" | "i32" | "i64"
 
 ### Named Type References
 
-- `name` in type position resolves to a previously visible type alias or a qualified type symbol.
+- `name` in type position resolves to a previously visible type alias.
 - Resolution failures are semantic validation errors.
 
 ## Contract
 
 - Aliases may name any valid `type_expr`.
 - Alias resolution follows normal visibility and ordering rules of module declarations.
-- Redefinition of an existing type name in the same module scope is invalid unless future rules introduce explicit shadowing or versioning behavior.
+- Redefinition of an existing type name in the same module visibility domain is invalid unless future rules introduce explicit shadowing or versioning behavior.
 
 ## Cross-Cutting Concerns
 
