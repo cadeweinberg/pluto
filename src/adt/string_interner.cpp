@@ -1,5 +1,6 @@
 // SPDX_Identifier: GPL-3.0-or-later
 
+#include <algorithm>
 #include <cassert>
 #include <limits>
 

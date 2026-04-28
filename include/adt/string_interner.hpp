@@ -8,8 +8,6 @@
 #include <vector>
 #include <memory>
 
-#include "adt/flat_map.hpp"
-
 namespace pluto {
 class StringInterner {
 public:
