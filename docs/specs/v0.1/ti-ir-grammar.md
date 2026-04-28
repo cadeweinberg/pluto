@@ -27,10 +27,10 @@ file            = { meta_decl }, module ;
 meta_decl       = ident, [ literal ], ";" ;
 
 module         = "module", ident, "{" { module_decl } "}" ;
-module_decl    = type_decl | const_decl | function_decl ;
+module_decl    = type_decl | let_decl | function_decl ;
 
 type_decl      = "type", { meta_decl }, ident, "=", type_expr, ";" ;
-const_decl     = "const", { meta_decl }, ident, ":", type_expr, "=", literal, ";" ;
+let_decl       = "let", { meta_decl }, ident, ":", type_expr, "=", literal, ";" ;
 
 function_decl  = "fn", { meta_decl }, ident, function_sig, "{", { block_decl }, "}" ;
 function_sig   = "(", [ param_list ], ")", "->", type_expr ;
@@ -86,14 +86,14 @@ Semantics:
 Semantics:
 
 - attaches one or more metadata entries to a single declaration.
-- Metadata attachment is supported for `type_decl`, `const_decl`, and `function_decl`.
+- Metadata attachment is supported for `type_decl`, `let_decl`, and `function_decl`.
 - Detailed metadata semantics are specified in [Metadata Declarations](meta-decls.md).
 
 ### 3. Module Form
 
 ```ebnf
 module         = "module", ident, "{" { module_decl } "}" ;
-module_decl    = type_decl | const_decl | function_decl ;
+module_decl    = type_decl | let_decl | function_decl ;
 ```
 
 Semantics:
@@ -113,7 +113,7 @@ Semantics:
 ### 5. Constant Declaration Form
 
 ```ebnf
-const_decl     = [ decl_meta_list ], "const", ident, ":", type_expr, "=", literal, ";" ;
+let_decl       = [ decl_meta_list ], "let", ident, ":", type_expr, "=", literal, ";" ;
 ```
 
 Semantics:
@@ -199,15 +199,15 @@ Semantics:
 
 ## Example: Straight-Line Function
 
-```asm
+```ti-ir
 format "ti-ir";
 version 0.1;
 
 module example;
 
 [doc "bias constant"; internal;]
-const one: i32 = 1;
-const two: i32 = 2;
+let one: i32 = 1;
+let two: i32 = 2;
 
 [doc "adds and doubles";]
 fn add_and_double(x: i32, y: i32) -> i32 {
@@ -234,14 +234,14 @@ Opcode set note for v0.1:
 
 ## Example: Type Alias Composition
 
-```asm
+```ti-ir
 format "ti-ir";
 version 0.1;
 
 module type_alias_demo;
 
 type i32_word = i32;
-const bias: i32_word = 1;
+let bias: i32_word = 1;
 
 fn add_with_bias(left: i32_word, right: i32_word) -> i32_word {
 entry:

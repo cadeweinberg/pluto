@@ -7,7 +7,7 @@ Scope: Semantics for module symbol visibility boundaries in TI-IR text files.
 
 ```ebnf
 module      = "module", ident, "{" { module_decl } "}" ;
-module_decl = type_decl | const_decl | function_decl ;
+module_decl = type_decl | let_decl | function_decl ;
 ```
 
 ## Semantics
@@ -20,11 +20,11 @@ module_decl = type_decl | const_decl | function_decl ;
 ### Module Declarations
 
 - `module_decl` is a syntactic container for top-level declarations.
-- Module semantics do not redefine declaration behavior for `type_decl`, `const_decl`, or `function_decl`; those are specified by their own semantic documents.
+- Module semantics do not redefine declaration behavior for `type_decl`, `let_decl`, or `function_decl`; those are specified by their own semantic documents.
 
 Allowed declarations:
 - `type_decl`
-- `const_decl`
+- `let_decl`
 - `function_decl`
 
 ## Contract

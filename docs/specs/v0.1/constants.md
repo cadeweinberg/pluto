@@ -6,12 +6,12 @@ Scope: Semantics for constant declarations in TI-IR text files.
 ## Grammar
 
 ```ebnf
-const_decl = "const", { meta_decl }, ident, ":", type_expr, "=", literal, ";" ;
+let_decl = "let", { meta_decl }, ident, ":", type_expr, "=", literal, ";" ;
 ```
 
 ## Semantics
 
-- `const` introduces a constant symbol in the enclosing module visibility domain with explicit type and literal initializer.
+- `let` introduces a constant symbol in the enclosing module visibility domain with explicit type and literal initializer.
 - metadata entries may be attached to a constant declaration.
 
 ## Contract

@@ -10,10 +10,12 @@ meta_decl = ident, [ string_literal ], ";" ;
 ```
 
 Interpretation:
+
 - `import` and `export` are metadata keys under `meta_decl`.
 - Their values are represented as `string_literal` payloads.
 
 Authority boundary:
+
 - This file is the source of truth for `import` and `export` linkage semantics.
 - Key registration and general metadata mechanics are defined in [Metadata Declarations](meta-decls.md).
 
@@ -24,6 +26,7 @@ Authority boundary:
 - Declares an external dependency that makes imported symbols available in the current module visibility domain.
 
 Value shape:
+
 - Resolver-specific import descriptor encoded as a string literal.
 
 ### export
@@ -31,6 +34,7 @@ Value shape:
 - Declares symbols intended to be visible outside the defining module visibility boundary.
 
 Value shape:
+
 - Export descriptor encoded as a string literal.
 
 ## Contract

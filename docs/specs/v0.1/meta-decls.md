@@ -7,14 +7,14 @@ Scope: Semantics for `meta_decl` entries at file scope and declaration-attached 
 
 ```ebnf
 file      = { meta_decl }, module ;
-meta_decl = "#" ident, [ literal ], ";" ;
+meta_decl = ident, [ literal ], ";" ;
 ```
 
 Interpretation:
 - `ident` is the metadata key.
 - `literal` is an optional metadata value payload.
 - If the value is omitted, the entry is a flag-style metadata declaration.
-- Metadata declarations may appear at file scope and attached to `type_decl`, `const_decl`, and `function_decl`.
+- Metadata declarations may appear at file scope and attached to `type_decl`, `let_decl`, and `function_decl`.
 
 ## Semantics
 
@@ -79,7 +79,7 @@ Notes:
 ### Declaration-Attached Metadata
 
 - `decl_meta_list` applies metadata to exactly one following declaration.
-- `decl_meta_list` supports only `type_decl`, `const_decl`, and `function_decl` in v0.1.
+- `decl_meta_list` supports only `type_decl`, `let_decl`, and `function_decl` in v0.1.
 - Declaration metadata keys are independent from file-level reserved keys unless a key specification states otherwise.
 - Key collisions inside a single `decl_meta_list` are semantic validation errors unless key-specific rules define merge behavior.
 

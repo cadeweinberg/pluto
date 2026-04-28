@@ -57,6 +57,6 @@ primitive_type = "i8" | "i16" | "i32" | "i64"
 
 ## Cross-Cutting Concerns
 
-- In `const_decl`, the declared type must match or admit the initializer literal by type-checking rules.
+- In `let_decl`, the declared type must match or admit the initializer literal by type-checking rules.
 - In `function_sig`, parameter and return `type_expr` forms are validated using these same type semantics.
 - In `inst_decl`, the annotated `type_expr` constrains opcode and operand typing.

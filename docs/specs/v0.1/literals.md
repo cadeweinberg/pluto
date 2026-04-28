@@ -30,7 +30,7 @@ integral_literal = digit, { digit } ;
 
 ## Contract
 
-- Tuple literals are valid in operand and const-initializer positions.
+- Tuple literals are valid in operand and let-initializer positions.
 - `()` denotes the nil literal.
 - Single-value parenthesization is not a tuple literal of arity 1.
 

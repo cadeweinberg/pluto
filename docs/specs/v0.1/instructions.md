@@ -40,9 +40,11 @@ inst_decl       = [ result_pattern, ":", type_expr, "=" ], opcode, operand_list,
 
 - `:` is reserved for type annotation and binds the annotated `type_expr` to the result binding/pattern.
 - **Named result patterns**: A single name binds the instruction result as a local SSA value:
-  ```
+
+  ```ti-ir
   x: i32 = add a, b;    (* result bound to name "x" *)
   ```
+  
   The name `x` becomes available for use in subsequent instructions and must satisfy SSA domination constraints.
 - **Tuple result patterns**: Reserved for future opcodes that produce tuple values; no opcode in the v0.1 minimal set supports tuple-producing results.
 - **Tuple destructuring as surface form**: Reserved for future lowering behavior once tuple-producing opcodes are in scope.
