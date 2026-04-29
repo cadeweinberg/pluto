@@ -1,89 +1,87 @@
 // SPDX-Identifier: GPL-3.0-or-later
 
 #include "ti-ir/type.hpp"
-#include "ti-ir/module.hpp"
 
 namespace pluto {
 
-std::unique_ptr<Type> Type::nil(const Module &module) {
+std::unique_ptr<Type> Type::nil() {
     PrimaryType nil_type{PrimaryType::Kind::Nil};
-    return std::make_unique<Type>(nil_type, module.layout(nil_type));
+    return std::make_unique<Type>(nil_type);
 }
 
-std::unique_ptr<Type> Type::boolean(const Module &module) {
+std::unique_ptr<Type> Type::boolean() {
     PrimaryType boolean_type{PrimaryType::Kind::Boolean};
-    return std::make_unique<Type>(boolean_type, module.layout(boolean_type));
+    return std::make_unique<Type>(boolean_type);
 }
 
-std::unique_ptr<Type> Type::i8(const Module &module) {
+std::unique_ptr<Type> Type::i8() {
     PrimaryType i8_type{PrimaryType::Kind::I8};
-    return std::make_unique<Type>(i8_type, module.layout(i8_type));
+    return std::make_unique<Type>(i8_type);
 }
 
-std::unique_ptr<Type> Type::i16(const Module &module) {
+std::unique_ptr<Type> Type::i16() {
     PrimaryType i16_type{PrimaryType::Kind::I16};
-    return std::make_unique<Type>(i16_type, module.layout(i16_type));
+    return std::make_unique<Type>(i16_type);
 }
 
-std::unique_ptr<Type> Type::i32(const Module &module) {
+std::unique_ptr<Type> Type::i32() {
     PrimaryType i32_type{PrimaryType::Kind::I32};
-    return std::make_unique<Type>(i32_type, module.layout(i32_type));
+    return std::make_unique<Type>(i32_type);
 }
 
-std::unique_ptr<Type> Type::i64(const Module &module) {
+std::unique_ptr<Type> Type::i64() {
     PrimaryType i64_type{PrimaryType::Kind::I64};
-    return std::make_unique<Type>(i64_type, module.layout(i64_type));
+    return std::make_unique<Type>(i64_type);
 }
 
-std::unique_ptr<Type> Type::u8(const Module &module) {
+std::unique_ptr<Type> Type::u8() {
     PrimaryType u8_type{PrimaryType::Kind::U8};
-    return std::make_unique<Type>(u8_type, module.layout(u8_type));
+    return std::make_unique<Type>(u8_type);
 }
 
-std::unique_ptr<Type> Type::u16(const Module &module) {
+std::unique_ptr<Type> Type::u16() {
     PrimaryType u16_type{PrimaryType::Kind::U16};
-    return std::make_unique<Type>(u16_type, module.layout(u16_type));
+    return std::make_unique<Type>(u16_type);
 }
 
-std::unique_ptr<Type> Type::u32(const Module &module) {
+std::unique_ptr<Type> Type::u32() {
     PrimaryType u32_type{PrimaryType::Kind::U32};
-    return std::make_unique<Type>(u32_type, module.layout(u32_type));
+    return std::make_unique<Type>(u32_type);
 }
 
-std::unique_ptr<Type> Type::u64(const Module &module) {
+std::unique_ptr<Type> Type::u64() {
     PrimaryType u64_type{PrimaryType::Kind::U64};
-    return std::make_unique<Type>(u64_type, module.layout(u64_type));
+    return std::make_unique<Type>(u64_type);
 }
 
-std::unique_ptr<Type> Type::f32(const Module &module) {
+std::unique_ptr<Type> Type::f32() {
     PrimaryType f32_type{PrimaryType::Kind::F32};
-    return std::make_unique<Type>(f32_type, module.layout(f32_type));
+    return std::make_unique<Type>(f32_type);
 }
 
-std::unique_ptr<Type> Type::f64(const Module &module) {
+std::unique_ptr<Type> Type::f64() {
     PrimaryType f64_type{PrimaryType::Kind::F64};
-    return std::make_unique<Type>(f64_type, module.layout(f64_type));
+    return std::make_unique<Type>(f64_type);
 }
 
-std::unique_ptr<Type> Type::ptr(const Module &module) {
+std::unique_ptr<Type> Type::ptr() {
     PrimaryType ptr_type{PrimaryType::Kind::Ptr};
-    return std::make_unique<Type>(ptr_type, module.layout(ptr_type));
+    return std::make_unique<Type>(ptr_type);
 }
 
-std::unique_ptr<Type> Type::tuple(std::vector<Type const *> elements, const Module &module) {
+std::unique_ptr<Type> Type::tuple(std::vector<Type const *> elements) {
     TupleType tuple_type{std::move(elements)};
-    return std::make_unique<Type>(std::move(tuple_type), module.layout(tuple_type));
+    return std::make_unique<Type>(std::move(tuple_type));
 }
 
-std::unique_ptr<Type> Type::array(Type const *element_type, size_t count, const Module &module) {
+std::unique_ptr<Type> Type::array(Type const *element_type, size_t count) {
     ArrayType array_type{element_type, count};
-    return std::make_unique<Type>(std::move(array_type), module.layout(array_type));
+    return std::make_unique<Type>(std::move(array_type));
 }
 
-std::unique_ptr<Type> Type::function(Type const *result, std::vector<Type const *> parameters,
-     const Module &module) {
+std::unique_ptr<Type> Type::function(Type const *result, std::vector<Type const *> parameters) {
     FunctionType function_type{result, std::move(parameters)};
-    return std::make_unique<Type>(std::move(function_type), module.layout(function_type));
+    return std::make_unique<Type>(std::move(function_type));
 }
 
 

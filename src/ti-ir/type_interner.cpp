@@ -1,39 +1,88 @@
 // SPDX-Identifier: GPL-3.0-or-later
 
 #include "ti-ir/type_interner.hpp"
-#include "ti-ir/module.hpp"
-
 namespace pluto {
-TypeInterner::TypeInterner(class Module &module)
-    : nil_type(Type::nil(module))
-    , i8_type(Type::i8(module))
-    , i16_type(Type::i16(module))
-    , i32_type(Type::i32(module))
-    , i64_type(Type::i64(module))
-    , u8_type(Type::u8(module))
-    , u16_type(Type::u16(module))
-    , u32_type(Type::u32(module))
-    , u64_type(Type::u64(module))
-    , f32_type(Type::f32(module))
-    , f64_type(Type::f64(module))
-    , boolean_type(Type::boolean(module))
-    , module(&module)
+TypeInterner::TypeInterner()
 {}
 
-Type const *TypeInterner::tuple(std::vector<Type const *> elements) {
-    // #NOTE: We duplicate the work of computing the layout here,
-    // if the type is already interned. We have to some up with a 
-    // proxy type which doesn't have a layout, check for equality,
-    // and only on a new insert do we compute the layout and create the full type.
-    return tuple_types.intern(Type::tuple(elements, *module));
+uint32_t TypeInterner::intern(std::unique_ptr<Type> type) const {
+    for (const auto &entry : storage) {
+        if (*entry.second == *type) {
+            return entry.first;
+        }
+    }
+
+    size_t index = storage.size();
+    assert(index < UINT32_MAX);
+    storage.emplace_back(static_cast<uint32_t>(index), std::move(type));
+    return static_cast<uint32_t>(index);
 }
 
-Type const *TypeInterner::array(Type const *element_type, size_t count) {
-    return array_types.intern(Type::array(element_type, count, *module));
+uint32_t TypeInterner::nil() const {
+    return intern(Type::nil());
 }
 
-Type const *TypeInterner::function(Type const *result, std::vector<Type const *> parameters) {
-    return function_types.intern(Type::function(result, std::move(parameters), *module));
+uint32_t TypeInterner::boolean() const {
+    return intern(Type::boolean());
+}
+
+uint32_t TypeInterner::i8() const {
+    return intern(Type::i8());
+}
+
+uint32_t TypeInterner::i16() const {
+    return intern(Type::i16());
+}
+
+uint32_t TypeInterner::i32() const {
+    return intern(Type::i32());
+}
+
+uint32_t TypeInterner::i64() const {
+    return intern(Type::i64());
+}
+
+uint32_t TypeInterner::u8() const {
+    return intern(Type::u8());
+}
+
+uint32_t TypeInterner::u16() const {
+    return intern(Type::u16());
+}
+
+uint32_t TypeInterner::u32() const {
+    return intern(Type::u32());
+}
+
+uint32_t TypeInterner::u64() const {
+    return intern(Type::u64());
+}
+
+uint32_t TypeInterner::f32() const {
+    return intern(Type::f32());
+}
+
+uint32_t TypeInterner::f64() const {
+    return intern(Type::f64());
+}
+
+uint32_t TypeInterner::ptr() const {
+    return intern(Type::ptr());
+}
+
+uint32_t TypeInterner::tuple(std::vector<Type const *> elements) {
+    TupleType tuple_type{std::move(elements)};
+    return intern(std::make_unique<Type>(tuple_type));
+}
+
+uint32_t TypeInterner::array(Type const *element_type, size_t count) {
+    ArrayType array_type{element_type, count};
+    return intern(std::make_unique<Type>(array_type));
+}
+
+uint32_t TypeInterner::function(Type const *result, std::vector<Type const *> parameters) {
+    FunctionType function_type{result, std::move(parameters)};
+    return intern(std::make_unique<Type>(function_type));
 }
 
 } // namespace pluto

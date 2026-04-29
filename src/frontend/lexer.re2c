@@ -83,9 +83,9 @@ void Lexer::up() {
   exponent   = 'e' [+-]? [0-9]+;
   float      = fractional exponent? | [0-9]+ exponent;
 
-  identifier = [!@%][-a-zA-Z$._][-a-zA-Z$._0-9]*
+  identifier = [!@%][-a-zA-Z$._][-a-zA-Z$._0-9]*;
 
-  string = '"' ([^"\\] | '\\' .)* '"';
+  string = "\"" ([^"\\] | '\\' .)* "\"";
 
   end = "\x00";
 
