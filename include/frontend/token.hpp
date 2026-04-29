@@ -11,23 +11,21 @@ enum class Token : uint16_t {
     EndOfFile,
 
     // Keywords
-    Module,
+    Def,
     Type,
-    Let,
-    Fn,
-    Struct,
+    Ptr,
 
     // Symbols
     ParenBegin,
     ParenEnd,
     BraceBegin,
     BraceEnd,
+    BracketBegin,
+    BracketEnd,
     Equal,
     Colon,
     Semicolon,
     Comma,
-    Arrow,
-    At,
 
     // Types
     TypeI8,

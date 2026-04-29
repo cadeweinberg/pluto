@@ -76,11 +76,6 @@ void Lexer::up() {
   re2c:eof = 0;
 
   re2c:define:YYCTYPE      = "unsigned char";
-*/
-
-/*!include:re2c "unicode_categories.re"*/
-
-/*!re2c
 
   integer = [0-9][0-9]*;
 
@@ -88,11 +83,7 @@ void Lexer::up() {
   exponent   = 'e' [+-]? [0-9]+;
   float      = fractional exponent? | [0-9]+ exponent;
 
-  // Simplified "Unicode Identifier and Pattern Syntax"
-  // see https://unicode.org/reports/tr31
-  id_start     = L | Nl | [_];
-  id_continue  = id_start | Mn | Mc | Nd | Pc | [\u200D\u05F3];
-  identifier   = id_start id_continue*;
+  identifier = [!@%][-a-zA-Z$._][-a-zA-Z$._0-9]*
 
   string = '"' ([^"\\] | '\\' .)* '"';
 
@@ -108,22 +99,19 @@ Token Lexer::next() {
             $  { up(); return Token::EndOfFile; }
             ws { up(); continue; }
 
-            "module" { up(); return Token::Module; }
-            "type"   { up(); return Token::Type; }
-            "let"    { up(); return Token::Let; }
-            "fn"     { up(); return Token::Fn; }
-            "struct" { up(); return Token::Struct; }
+            "def"  { up(); return Token::Def; }
+            "ptr"  { up(); return Token::Ptr; }
 
             "(" { up(); return Token::ParenBegin; }
             ")" { up(); return Token::ParenEnd; }
             "{" { up(); return Token::BraceBegin; }
             "}" { up(); return Token::BraceEnd; }
+            "[" { up(); return Token::BracketBegin; }
+            "]" { up(); return Token::BracketEnd; }
             "=" { up(); return Token::Equal; }
             ":" { up(); return Token::Colon; }
             ";" { up(); return Token::Semicolon; }
             "," { up(); return Token::Comma; }
-            "->" { up(); return Token::Arrow; }
-            "@" { up(); return Token::At; }
 
             "i8"   { up(); return Token::TypeI8; }
             "i16"  { up(); return Token::TypeI16; }

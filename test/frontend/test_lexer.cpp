@@ -8,11 +8,9 @@
 
 TEST_CASE("Lexer keywords", "[Lexer, Frontend]") {
     std::vector<std::pair<std::string_view, pluto::Token>> cases = {
-        {"module", pluto::Token::Module},
+        {"def", pluto::Token::Def},
         {"type", pluto::Token::Type},
-        {"let", pluto::Token::Let},
-        {"fn", pluto::Token::Fn},
-        {"struct", pluto::Token::Struct},
+        {"ptr", pluto::Token::Ptr},
     };
 
     for (const auto& [input, expected] : cases) {
@@ -31,8 +29,6 @@ TEST_CASE("Lexer symbols", "[Lexer, Frontend]") {
         {":", pluto::Token::Colon},
         {";", pluto::Token::Semicolon},
         {",", pluto::Token::Comma},
-        {"->", pluto::Token::Arrow},
-        {"@", pluto::Token::At},
     };
 
     for (const auto& [input, expected] : cases) {
