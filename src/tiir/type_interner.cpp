@@ -1,6 +1,7 @@
 // SPDX-Identifier: GPL-3.0-or-later
 
-#include "ti-ir/type_interner.hpp"
+#include "tiir/type_interner.hpp"
+
 namespace pluto {
 TypeInterner::TypeInterner()
 {}

@@ -1,7 +1,7 @@
 // SPDX-Identifier: GPL-3.0-or-later
 
-#ifndef PLUTO_TI_IR_OPCODE_HPP
-#define PLUTO_TI_IR_OPCODE_HPP
+#ifndef PLUTO_TIIR_OPCODE_HPP
+#define PLUTO_TIIR_OPCODE_HPP
 
 #include <cstdint>
 
@@ -60,4 +60,4 @@ enum class Opcode : uint16_t {
     such as i8, i16, i32, i64, u8, u16, u32, u64, f32, f64, bool, nil.
 */
 
-#endif // !PLUTO_TI_IR_OPCODE_HPP
+#endif // !PLUTO_TIIR_OPCODE_HPP

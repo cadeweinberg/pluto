@@ -1,7 +1,7 @@
 // SPDX-Identifier: GPL-3.0-or-later
 
-#ifndef PLUTO_TI_IR_INDEX_HPP
-#define PLUTO_TI_IR_INDEX_HPP
+#ifndef PLUTO_TIIR_INDEX_HPP
+#define PLUTO_TIIR_INDEX_HPP
 
 #include <cstdint>
 #include <limits>
@@ -15,7 +15,7 @@ struct Index {
     }
 
     bool isValid() const noexcept {
-        return value != invalid().value;;
+        return value != invalid().value;
     }
 
     bool operator==(const Index &other) const {
@@ -44,4 +44,4 @@ struct Slice {
 };
 } // namespace pluto
 
-#endif // !PLUTO_TI_IR_INDEX_HPP
+#endif // !PLUTO_TIIR_INDEX_HPP

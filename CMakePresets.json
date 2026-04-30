@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 8,
   "cmakeMinimumRequired": {
     "major": 3,
     "minor": 20,
@@ -81,6 +81,26 @@
       "output": {
         "outputOnFailure": true
       }
+    }
+  ],
+  "workflowPresets": [
+    {
+      "name": "Debug",
+      "displayName": "Debug",
+      "steps": [
+        {
+	  "type": "configure",
+	  "name": "Debug"
+	},
+	{
+	  "type": "build",
+	  "name": "Debug"
+	},
+	{
+	  "type": "test",
+	  "name": "Debug"
+	}
+      ]
     }
   ]
 }

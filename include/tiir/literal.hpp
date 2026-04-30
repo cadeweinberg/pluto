@@ -1,10 +1,10 @@
 // SPDX-Identifier: GPL-3.0-or-later
 
-#ifndef PLUTO_TI_IR_LITERAL_HPP
-#define PLUTO_TI_IR_LITERAL_HPP
+#ifndef PLUTO_TIIR_LITERAL_HPP
+#define PLUTO_TIIR_LITERAL_HPP
 
-#include "ti-ir/index.hpp"
-#include "ti-ir/operand.hpp"
+#include "tiir/index.hpp"
+#include "tiir/operand.hpp"
 
 namespace pluto {
 struct Literal {
@@ -36,4 +36,4 @@ struct Literal {
 };
 } // namespace pluto
 
-#endif // !PLUTO_TI_IR_LITERAL_HPP
+#endif // !PLUTO_TIIR_LITERAL_HPP

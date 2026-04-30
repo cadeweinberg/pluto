@@ -1,11 +1,11 @@
 // SPDX-Identifier: GPL-3.0-or-later
 
-#ifndef PLUTO_TI_IR_OPERAND_HPP
-#define PLUTO_TI_IR_OPERAND_HPP
+#ifndef PLUTO_TIIR_OPERAND_HPP
+#define PLUTO_TIIR_OPERAND_HPP
 
 #include <cstdint>
 
-#include "ti-ir/index.hpp"
+#include "tiir/index.hpp"
 
 namespace pluto {
 struct Operand {
@@ -20,4 +20,4 @@ struct Operand {
 };
 } // namespace pluto
 
-#endif // !PLUTO_TI_IR_OPERAND_HPP
+#endif // !PLUTO_TIIR_OPERAND_HPP

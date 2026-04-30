@@ -1,11 +1,11 @@
 // SPDX-Identifier: GPL-3.0-or-later
 
-#ifndef PLUTO_TI_IR_MODULE_HPP
-#define PLUTO_TI_IR_MODULE_HPP
+#ifndef PLUTO_TIIR_MODULE_HPP
+#define PLUTO_TIIR_MODULE_HPP
 
-#include "ti-ir/string_interner.hpp"
-#include "ti-ir/type_interner.hpp"
-#include "ti-ir/literal.hpp"
+#include "tiir/string_interner.hpp"
+#include "tiir/type_interner.hpp"
+#include "tiir/literal.hpp"
 
 namespace pluto {
 class Module {
@@ -21,4 +21,4 @@ private:
 };
 } // namespace pluto
 
-#endif // !PLUTO_TI_IR_MODULE_HPP
+#endif // !PLUTO_TIIR_MODULE_HPP

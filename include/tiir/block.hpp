@@ -1,9 +1,9 @@
 // SPDX-Identifier: GPL-3.0-or-later
 
-#ifndef PLUTO_TI_IR_BLOCK_HPP
-#define PLUTO_TI_IR_BLOCK_HPP
+#ifndef PLUTO_TIIR_BLOCK_HPP
+#define PLUTO_TIIR_BLOCK_HPP
 
-#include "ti-ir/index.hpp"
+#include "tiir/index.hpp"
 
 namespace pluto {
 struct Block {
@@ -13,4 +13,4 @@ struct Block {
 };
 
 
-#endif // !PLUTO_TI_IR_BLOCK_HPP
+#endif // !PLUTO_TIIR_BLOCK_HPP

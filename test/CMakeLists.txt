@@ -10,13 +10,13 @@ target_link_libraries(pluto_adt_tests PRIVATE Catch2::Catch2WithMain)
 
 catch_discover_tests(pluto_adt_tests)
 
-add_executable(pluto_ti_ir_tests
-    adt/test_string_interner.cpp
+add_executable(pluto_tiir_tests
+    tiir/test_string_interner.cpp
 )
-target_include_directories(pluto_ti_ir_tests PRIVATE ${PLUTO_INCLUDE_DIR})
-target_link_libraries(pluto_ti_ir_tests PRIVATE pluto_ti_ir Catch2::Catch2WithMain)
+target_include_directories(pluto_tiir_tests PRIVATE ${PLUTO_INCLUDE_DIR})
+target_link_libraries(pluto_tiir_tests PRIVATE pluto_tiir Catch2::Catch2WithMain)
 
-catch_discover_tests(pluto_ti_ir_tests)
+catch_discover_tests(pluto_tiir_tests)
 
 
 add_executable(pluto_frontend_tests

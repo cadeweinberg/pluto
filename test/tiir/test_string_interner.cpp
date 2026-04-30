@@ -2,11 +2,11 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include "adt/string_interner.hpp"
+#include "tiir/string_interner.hpp"
 
 TEST_CASE("StringInterner", "[StringInterner, ADT]") {
     pluto::StringInterner interner;
-    std::vector<pluto::StringInterner::StringId> ids;
+    std::vector<pluto::Index> ids;
     ids.push_back(interner.intern("hello"));
     ids.push_back(interner.intern("world"));
     ids.push_back(interner.intern("hello"));

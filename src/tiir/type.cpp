@@ -1,6 +1,6 @@
 // SPDX-Identifier: GPL-3.0-or-later
 
-#include "ti-ir/type.hpp"
+#include "tiir/type.hpp"
 
 namespace pluto {
 

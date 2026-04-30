@@ -1,11 +1,12 @@
 // SPDX-Identifier: GPL-3.0-or-later
 
-#ifndef PLUTO_TI_IR_TYPE_HPP
-#define PLUTO_TI_IR_TYPE_HPP
+#ifndef PLUTO_TIIR_TYPE_HPP
+#define PLUTO_TIIR_TYPE_HPP
 
 #include <memory>
 #include <vector>
 #include <variant>
+
 namespace pluto {
 struct Type;
 struct PrimaryType {
@@ -89,4 +90,4 @@ public:
 };
 } // namespace pluto
 
-#endif // !PLUTO_TI_IR_TYPE_HPP
+#endif // !PLUTO_TIIR_TYPE_HPP

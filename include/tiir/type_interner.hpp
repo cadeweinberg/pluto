@@ -1,13 +1,13 @@
 // SPDX-Identifier: GPL-3.0-or-later
 
-#ifndef PLUTO_TI_IR_TYPE_INTERNER_HPP
-#define PLUTO_TI_IR_TYPE_INTERNER_HPP
+#ifndef PLUTO_TIIR_TYPE_INTERNER_HPP
+#define PLUTO_TIIR_TYPE_INTERNER_HPP
 
 #include <cassert>
 #include <vector>
 #include <memory>
 
-#include "ti-ir/type.hpp"
+#include "tiir/type.hpp"
 
 namespace pluto {
 class TypeInterner {
@@ -44,4 +44,4 @@ public:
 };
 } // namespace pluto
 
-#endif // !PLUTO_TI_IR_TYPE_INTERNER_HPP
+#endif // !PLUTO_TIIR_TYPE_INTERNER_HPP

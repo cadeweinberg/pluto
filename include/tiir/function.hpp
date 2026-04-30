@@ -1,15 +1,15 @@
 // SPDX-Identifier: GPL-3.0-or-later
 
-#ifndef PLUTO_TI_IR_FUNCTION_HPP
-#define PLUTO_TI_IR_FUNCTION_HPP
+#ifndef PLUTO_TIIR_FUNCTION_HPP
+#define PLUTO_TIIR_FUNCTION_HPP
 
 #include <vector>
 
-#include "ti-ir/block.hpp"
-#include "ti-ir/instruction.hpp"
-#include "ti-ir/operand.hpp"
-#include "ti-ir/ssa.hpp"
-#include "ti-ir/tuple.hpp"
+#include "tiir/block.hpp"
+#include "tiir/instruction.hpp"
+#include "tiir/operand.hpp"
+#include "tiir/ssa.hpp"
+#include "tiir/tuple.hpp"
 
 namespace pluto {
 struct Function {
@@ -19,7 +19,7 @@ struct Function {
   };
 
   Index name;
-  Index return_type;
+  Index type;
   std::vector<Parameter> parameters;
   std::vector<SSA> locals;
   std::vector<Block> blocks;
@@ -29,4 +29,4 @@ struct Function {
 };
 } // namespace pluto
 
-#endif // !PLUTO_TI_IR_FUNCTION_HPP
+#endif // !PLUTO_TIIR_FUNCTION_HPP

@@ -9,7 +9,6 @@
 TEST_CASE("Lexer keywords", "[Lexer, Frontend]") {
     std::vector<std::pair<std::string_view, pluto::Token>> cases = {
         {"def", pluto::Token::Def},
-        {"type", pluto::Token::Type},
         {"ptr", pluto::Token::Ptr},
     };
 
@@ -76,10 +75,10 @@ TEST_CASE("Lexer literals", "[Lexer, Frontend]") {
 
 TEST_CASE("Lexer identifiers", "[Lexer, Frontend]") {
     std::vector<std::string_view> cases = {
-        "foo",
-        "bar",
-        "my_variable",
-        "Test123",
+        "!foo",
+        "@bar",
+        "%my_variable",
+        "@Test123",
     };
 
     for (const auto& input : cases) {

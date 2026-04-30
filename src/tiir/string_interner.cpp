@@ -4,7 +4,7 @@
 #include <cassert>
 #include <limits>
 
-#include "ti-ir/string_interner.hpp"
+#include "tiir/string_interner.hpp"
 
 namespace pluto {
 Index StringInterner::intern(std::string_view view) {

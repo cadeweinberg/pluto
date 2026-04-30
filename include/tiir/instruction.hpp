@@ -1,11 +1,11 @@
 // SPDX-Identifier: GPL-3.0-or-later
 
-#ifndef PLUTO_TI_IR_INSTRUCTION_HPP
-#define PLUTO_TI_IR_INSTRUCTION_HPP
+#ifndef PLUTO_TIIR_INSTRUCTION_HPP
+#define PLUTO_TIIR_INSTRUCTION_HPP
 
 #include <cstring>
 
-#include "ti-ir/opcode.hpp"
+#include "tiir/opcode.hpp"
 
 namespace pluto {
 /// An instruction is a single operation in the IR.
@@ -53,4 +53,4 @@ inline Instruction::I Instruction::as<Instruction::I>() const {
 
 } // namespace pluto
 
-#endif // !PLUTO_TI_IR_INSTRUCTION_HPP
+#endif // !PLUTO_TIIR_INSTRUCTION_HPP
