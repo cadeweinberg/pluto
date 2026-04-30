@@ -11,7 +11,6 @@
        abstractions. This is the library which is used to abstract
        the implementation of the compiler away from the differences
        between C on Linux, Windows, macOS, BSD, etc...
-       It defines, String, Assert, Breakpoint, Process, Message, etc
   - [] context: holds the context specific information to the current
        run of the compiler. This is where the incoming arguments to
        the program are parsed, where the options controlling the

@@ -16,7 +16,7 @@ struct SourceLocation {
         : first_line(1)
         , first_column(1)
         , last_line(1)
-        , last_column(1) 
+        , last_column(1)
     {}
 
     SourceLocation(uint32_t first_line, uint32_t first_column, uint32_t last_line, uint32_t last_column)
