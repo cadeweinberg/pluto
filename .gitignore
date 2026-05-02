@@ -54,13 +54,12 @@ dkms.conf
 # debug information files
 *.dwo
 
-# Build directories
+# project enviornment
+docs/build/
 build/
+out/
 cmake-build-*/
-
-# VsCode files
 .vscode/
-.continue
-
-# generated files
-src/frontend/lexer.cpp
+.continue/
+.cache/
+.venv/
