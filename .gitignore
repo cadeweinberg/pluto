@@ -56,6 +56,9 @@ dkms.conf
 
 # project enviornment
 docs/build/
+docs/html/
+docs/latex/
+subprojects/*
 build/
 out/
 cmake-build-*/
@@ -63,3 +66,6 @@ cmake-build-*/
 .continue/
 .cache/
 .venv/
+.build/
+
+
