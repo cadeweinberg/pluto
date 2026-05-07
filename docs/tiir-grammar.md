@@ -265,7 +265,7 @@ Planned
 
 ##### 1.2 Feature
 
-In C99, a declaration introduces a name and type; a definition additionally allocates storage for an object or provides a function body. For object declarations in this matrix pass, treat presence of an initializer as a practical definition signal. Multiple compatible declarations are allowed in one translation unit, but only one non-tentative definition per object/function is allowed.
+In C99, a declaration introduces a name and type; a definition additionally allocates storage for an object or provides a function body. Storage class (extern, static, auto) and type qualifiers (const, volatile, restrict) are encoded via metadata tags. For object declarations, treat presence of an initializer as a practical definition signal. Multiple compatible declarations are allowed in one translation unit, but only one non-tentative definition per object/function is allowed. File-scope object declarations without explicit storage class or initializer are tentative definitions.
 
 ##### 1.2 Representative C Snippet
 
@@ -283,11 +283,16 @@ int f(void) {
 ##### 1.2 TIIR Canonical Form
 
 ```tiir
-symbol @g : i32 extern;
-symbol @g : i32 extern;
+[!linkage: external]
+symbol @g : i32;
+
+[!linkage: external]
+symbol @g : i32;
+
 symbol @g : i32 = 42;
 
 symbol @f : () -> i32;
+
 symbol @f : () -> i32:
   ret @g
 ```
@@ -297,6 +302,7 @@ symbol @f : () -> i32:
 - symbol declaration form without initializer/body
 - symbol definition form with initializer (objects) or body (functions)
 - repeated top-level declarations for the same symbol name
+- metadata tag productions for storage class (!linkage: external|internal|none) and qualifiers (!qualifiers, !volatile)
 
 ##### 1.2 In-Memory Nodes Required
 
@@ -304,15 +310,19 @@ symbol @f : () -> i32:
 - optional initializer payload for objects
 - optional body payload for functions
 - redeclaration chain (or list of declaration sites) per symbol
+- metadata tag storage for storage class and qualifiers per symbol
 
 ##### 1.2 Semantic Validation Rules
 
-- compatible repeated declarations are allowed
+- compatible repeated declarations are allowed (same type, compatible storage-class tags)
 - incompatible redeclarations are invalid
 - at most one non-tentative definition per symbol in a translation unit
 - object declaration with initializer is a definition
+- object declaration without initializer and without extern tag is a tentative definition
+- object declaration with extern tag and no initializer is a declaration only
 - function declaration without body is not a definition
 - function declaration with body is a definition
+- tentative definitions not overridden by full definition are implicitly zero-initialized at end of translation unit
 
 ##### 1.2 Lowering Notes (Target Independent)
 
