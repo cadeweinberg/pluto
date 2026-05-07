@@ -21,6 +21,13 @@ context = library(
   link_with: [support],
 )
 
+tiir = library(
+  'pluto-tiir',
+  ['src/tiir/operand.c', 'src/tiir/value.c'],
+  include_directories: [include_dir],
+  link_with: [support, context],
+)
+
 executable('charon', 'src/main.c', include_directories: include_dir)
 
 cmocka = dependency('cmocka')
@@ -60,3 +67,12 @@ test_si = executable(
   dependencies: [cmocka],
 )
 test('string-interner', test_si)
+
+test_value = executable(
+  'test-value',
+  ['tests/src/tiir/value.c'],
+  include_directories: [include_dir],
+  link_with: [support, context, tiir],
+  dependencies: [cmocka],
+)
+test('value', test_value)
