@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-enable_testing()
+cmake_minimum_required(VERSION 3.10)
 
 # Test: cli-parser
 add_executable(test-cli-parser
@@ -39,7 +39,7 @@ add_executable(test-operand
   src/tiir/operand.c
 )
 target_include_directories(test-operand PRIVATE ${PLUTO_INCLUDE_DIR})
-target_link_libraries(test-operand PRIVATE pluto-support pluto-context pluto-tiir cmocka)
+target_link_libraries(test-operand PRIVATE pluto-tiir cmocka)
 add_test(NAME operand COMMAND test-operand)
 
 # Test: value

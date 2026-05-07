@@ -4,24 +4,10 @@ A Target Independent Code Generator, Optimizer, and Analysis Framework.
 
 ## Build
 
-### Using Meson (recommended)
-
-```sh
-meson setup .build
-meson compile -C .build
-```
-
 ### Using CMake
 
 ```sh
-cmake -B cmake-build
-cmake --build cmake-build
-```
-
-To run tests with CMake (requires cmocka):
-
-```sh
-cmake -B cmake-build
-cmake --build cmake-build
-ctest --test-dir cmake-build
+cmake -S . -B build
+cmake --build build
+ctest --test-dir build
 ```
