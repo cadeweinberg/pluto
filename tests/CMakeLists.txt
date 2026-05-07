@@ -43,9 +43,9 @@ target_link_libraries(test-operand PRIVATE pluto-tiir cmocka)
 add_test(NAME operand COMMAND test-operand)
 
 # Test: value
-add_executable(test-value
-  src/tiir/value.c
+add_executable(test-literal
+  src/tiir/literal.c
 )
-target_include_directories(test-value PRIVATE ${PLUTO_INCLUDE_DIR})
-target_link_libraries(test-value PRIVATE pluto-support pluto-context pluto-tiir cmocka)
-add_test(NAME value COMMAND test-value)
+target_include_directories(test-literal PRIVATE ${PLUTO_INCLUDE_DIR})
+target_link_libraries(test-literal PRIVATE pluto-support pluto-context pluto-tiir cmocka)
+add_test(NAME literal COMMAND test-literal)

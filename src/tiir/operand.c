@@ -3,8 +3,8 @@
 #include "tiir/operand.h"
 #include "context/context.h"
 
-pluto_Operand pluto_operand_constant(uint32_t constant) {
-    return (pluto_Operand){ .kind = PLUTO_OPERAND_KIND_CONSTANT, .data = constant };
+pluto_Operand pluto_operand_literal(uint32_t literal) {
+    return (pluto_Operand){ .kind = PLUTO_OPERAND_KIND_LITERAL, .data = literal };
 }
 
 pluto_Operand pluto_operand_register(uint32_t reg) {
@@ -21,9 +21,9 @@ pluto_Operand pluto_operand_label(uint32_t label) {
 
 void pluto_operand_print(FILE *out, pluto_Operand operand, struct _pluto_Context *ctx) {
     switch (operand.kind) {
-        case PLUTO_OPERAND_KIND_CONSTANT: {
-            pluto_Value value = pluto_context_get_value(ctx, operand.data);
-            pluto_value_print(out, value, ctx);
+        case PLUTO_OPERAND_KIND_LITERAL: {
+            pluto_Literal value = pluto_context_get_literal(ctx, operand.data);
+            pluto_literal_print(out, value, ctx);
             break;
         }
         case PLUTO_OPERAND_KIND_REGISTER:

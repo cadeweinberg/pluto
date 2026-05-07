@@ -3,8 +3,8 @@
 cmake_minimum_required(VERSION 3.10)
 
 add_library(pluto-tiir STATIC
+  literal.c
   operand.c
-  value.c
 )
 
 target_include_directories(pluto-tiir PUBLIC ${PLUTO_INCLUDE_DIR})

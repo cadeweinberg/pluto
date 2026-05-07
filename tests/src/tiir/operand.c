@@ -9,9 +9,9 @@
 
 #include "tiir/operand.h"
 
-void test_operand_constant(void **) {
-    pluto_Operand operand = pluto_operand_constant(42);
-    assert_int_equal(operand.kind, PLUTO_OPERAND_KIND_CONSTANT);
+void test_operand_literal(void **) {
+    pluto_Operand operand = pluto_operand_literal(42);
+    assert_int_equal(operand.kind, PLUTO_OPERAND_KIND_LITERAL);
     assert_int_equal(operand.data, 42);
 }
 
@@ -35,7 +35,7 @@ void test_operand_label(void **) {
 
 int main(void) {
     const struct CMUnitTest tests[] = {
-        cmocka_unit_test(test_operand_constant),
+        cmocka_unit_test(test_operand_literal),
         cmocka_unit_test(test_operand_register),
         cmocka_unit_test(test_operand_immediate),
         cmocka_unit_test(test_operand_label),
