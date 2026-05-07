@@ -37,6 +37,7 @@ This section is normative for TIIR v1. The lexer, parser, and in-memory model sh
 - Tag grammar
   - tag definitions (`tag !id = [ ... ]`)
   - prefix tag usage (`[!id]`) attached to declarations and instructions
+  - inline tag usage (`... [!key: value {, !key: value}]`) on symbol/instruction statements
   - list-form key/value tags (`[!key: value {, !key: value}]`)
   - generic debug metadata keys (for example: `!file`, `!line`, `!column`), without DWARF node schema requirements
 - Symbol grammar
@@ -75,12 +76,13 @@ This section is normative for TIIR v1. The lexer, parser, and in-memory model sh
 
 Preliminary v1 listing of required module-level metadata.
 
-Module metadata may be written as either:
+Metadata tags may be attached:
 
-- single-entry tag lines: `[!key: value]`
-- list-form tag lines: `[!key: value, !key: value, ...]`
+- as prefix lines: `[!key: value]` preceding a declaration or instruction
+- as inline annotations: `symbol ... [!key: value]` or `... instruction [!key: value]` at end of statement
+- in list form: `[!key: value, !key: value, ...]`
 
-Both forms are equivalent in v1.
+All forms are equivalent in v1; inline form is recommended for conciseness when tagging individual symbols.
 
 ### MLM: Required in v1
 
@@ -338,6 +340,79 @@ Planned
 - positive: function prototype followed by one function body
 
 #### 1.3 External, Internal, and No Linkage
+
+##### 1.3 Feature
+
+Linkage determines the scope of symbol visibility across translation units. C99 defines three linkage classes: external (visible across translation units, default for functions and file-scope objects), internal (visible only within the translation unit, static at file scope), and no linkage (local variables, function parameters, labels). TIIR encodes linkage via the `!linkage` metadata tag on symbol declarations.
+
+##### 1.3 Representative C Snippet
+
+```c
+int global_extern;         /* external linkage */
+static int global_internal;/* internal linkage */
+
+int func_extern(void) {     /* external linkage */
+  static int local_static;  /* no linkage (allocated storage) */
+  int local_auto;           /* no linkage (automatic storage) */
+  return global_internal;
+}
+
+static int func_internal(void) { /* internal linkage */
+  return global_extern;
+}
+```
+
+##### 1.3 TIIR Canonical Form
+
+```tiir
+symbol @global_extern : i32 [!linkage: external];
+
+symbol @global_internal : i32 [!linkage: internal];
+
+symbol @func_extern : () -> i32:
+  symbol @local_static : i32 [!linkage: internal];
+  %0 = load @global_internal
+  ret %0
+
+symbol @func_internal : () -> i32 [!linkage: internal]:
+  %0 = load @global_extern
+  ret %0
+```
+
+##### 1.3 Grammar Productions Required
+
+- symbol declaration with `!linkage` metadata tag
+- valid linkage values: external, internal, none (or default if omitted)
+- function and block-level symbol declarations
+
+##### 1.3 In-Memory Nodes Required
+
+- symbol node with linkage attribute
+- linkage kind enum: EXTERNAL, INTERNAL, NONE
+- mapping from C storage-class specifiers to linkage kind
+
+##### 1.3 Semantic Validation Rules
+
+- external linkage symbols are visible across translation units; all redeclarations must agree on external linkage
+- internal linkage symbols are visible only in their translation unit; multiple internal symbols with same name in different translation units are distinct
+- no-linkage symbols are local to their enclosing scope and have no cross-translation-unit visibility
+- at most one external definition per symbol across all translation units (linker enforces)
+- internal definitions do not conflict across translation units
+
+##### 1.3 Lowering Notes (Target Independent)
+
+Emit external symbols with global visibility directives compatible with target object format. Emit internal symbols with visibility restrictions to current translation unit only. Preserve no-linkage symbols as local scope entries with appropriate storage duration attributes.
+
+##### 1.3 Test Coverage Status
+
+Planned
+
+- positive: external and internal symbols at file scope
+- positive: function with internal linkage
+- positive: static local variable within function
+- positive: extern declaration in function scope
+- negative: conflicting linkage redeclarations
+- negative: multiple external definitions across modules (tested at linker level)
 
 #### 1.4 Storage Duration: Static, Automatic, Allocated
 
