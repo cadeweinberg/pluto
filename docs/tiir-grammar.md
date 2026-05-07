@@ -22,8 +22,10 @@
 - v1 scope: core executable IR (not declarations-only).
 - Pointer syntax: opaque ptr keyword.
 - Metadata attachment: prefix tag-use blocks.
-- Symbol identity: both named and numeric symbols.
+- Metadata key syntax: all metadata tags use `!id` prefix (e.g., `!version`, `!storage`, `!linkage`).
+- Symbol identity: both named and numeric symbols; global symbols use `@` prefix, local (block-scoped) symbols use `%` prefix.
 - Debug metadata: generic tag schema for v1, not DWARF-specific node schema.
+- Grammar LL(1) compliance: parser must be implementable as recursive-descent without lookahead conflict.
 
 ## v1 Scope (Locked)
 
@@ -41,9 +43,10 @@ This section is normative for TIIR v1. The lexer, parser, and in-memory model sh
   - list-form key/value tags (`[!key: value {, !key: value}]`)
   - generic debug metadata keys (for example: `!file`, `!line`, `!column`), without DWARF node schema requirements
 - Symbol grammar
-  - symbol identifiers in both forms: named (`@main`) and numeric (`@0`)
+  - global symbols use `@` prefix: named form (`@main`, `@g`, `@f`) or numeric form (`@0`, `@1`)
+  - local (block-scoped) symbols use `%` prefix: named form (`%a`, `%p`) or numeric form (`%0`, `%1`, `%N`)
   - global symbol declarations/definitions for constants, variables, and extern functions
-  - function signatures and function bodies
+  - function signatures and function bodies with local symbol declarations
 - Core executable IR grammar
   - labels/basic blocks
   - instruction syntax needed for first-pass C99 lowering examples (call, return, branch, load/store, basic arithmetic/compare/cast forms)
@@ -166,11 +169,14 @@ All forms are equivalent in v1; inline form is recommended for conciseness when 
 ### MLM: Preliminary Grammar Spec
 
 ```ebnf
-tag_def   = "tag" tag_id "=" "[" tag_list "]" ;
-tag_use   = "[" tag_list "]" ;
-tag_list  = tag_elem {"," tag_elem} ;
-tag_elem  = tag_id [":" literal] ;
-tag_id    = "!" id ;
+tag_def         = "tag" tag_id "=" "[" tag_list "]" ;
+tag_use         = "[" tag_list "]" ;
+tag_list        = tag_elem {"," tag_elem} ;
+tag_elem        = tag_id [":" literal] ;
+tag_id          = "!" id ;
+
+global_symbol   = "@" (id | integer) ;
+local_symbol    = "%" (id | integer) ;
 ```
 
 ## C99 Coverage
@@ -370,7 +376,7 @@ symbol @global_extern : i32 [!linkage: external];
 symbol @global_internal : i32 [!linkage: internal];
 
 symbol @func_extern : () -> i32:
-  symbol @local_static : i32 [!linkage: internal];
+  symbol %local_static : i32 [!linkage: internal];
   %0 = load @global_internal
   ret %0
 
@@ -415,6 +421,79 @@ Planned
 - negative: multiple external definitions across modules (tested at linker level)
 
 #### 1.4 Storage Duration: Static, Automatic, Allocated
+
+##### 1.4 Feature
+
+C99 object lifetime is governed by storage class and duration, which are semantically coupled. Static storage objects exist for the entire program; automatic storage objects exist for their enclosing block scope; allocated storage objects are created/destroyed via runtime APIs (`malloc`/`free`). TIIR encodes storage semantics in a unified `!storage` metadata tag on declarations. Allocation sites are marked with `!storage: allocated`, and deallocation sites (free/delete calls) are marked with `!dealloc: allocated_ptr` to enable lifetime verification and leak detection passes.
+
+##### 1.4 Representative C Snippet
+
+```c
+static int gs = 1;   /* static duration */
+
+int f(void) {
+  int a = 0;         /* automatic duration */
+  int *p = malloc(sizeof(int)); /* allocated duration target object */
+  *p = gs + a;
+  free(p);
+  return gs;
+}
+```
+
+##### 1.4 TIIR Canonical Form
+
+```tiir
+symbol @gs : i32 = 1 [!storage: static, !linkage: internal];
+
+symbol @f : () -> i32 [!linkage: external]:
+  symbol %a : i32 = 0 [!storage: automatic];
+  %p = call (i64) -> ptr @malloc, (sizeof(i32)) [!storage: allocated]
+  store (add (load @gs), (load %a)), %p
+  call (ptr) -> void @free, (%p) [!dealloc]
+  ret (load @gs)
+```
+
+##### 1.4 Grammar Productions Required
+
+- symbol declarations with inline metadata tags
+- metadata key/value entries for `!storage` (valid values: static, automatic, allocated)
+- metadata key/value entries for deallocation point annotation (`!dealloc: allocated_ptr`)
+- call/store/load forms sufficient to express allocated object usage through pointers
+
+##### 1.4 In-Memory Nodes Required
+
+- symbol storage-class attribute enum: STATIC, AUTOMATIC, ALLOCATED
+- instruction/result metadata attachment for allocated-storage values
+- deallocation site tracking (free/delete call annotation) for lifetime analysis
+- pointer/object-lifetime relationship tracking for analysis passes
+- optional escape/liveness/must-free metadata hooks for allocated objects
+
+##### 1.4 Semantic Validation Rules
+
+- file-scope object definitions default to `!storage: static`
+- block-scope non-static object declarations default to `!storage: automatic`
+- block-scope `static` declarations map to `!storage: static`
+- allocated-storage objects cannot be declared directly as symbols; they arise from allocation operations
+- each allocation call must have a corresponding deallocation site or escape point for soundness checking
+- uses after `free` (marked `!dealloc`) are invalid at semantic-analysis level when detectable
+- storage metadata on redeclarations must be compatible
+- deallocation sites must reference previously allocated pointers
+
+##### 1.4 Lowering Notes (Target Independent)
+
+Lower `!storage: static` objects into module-level data definitions. Lower `!storage: automatic` objects into function-frame storage. Model `!storage: allocated` objects as heap references obtained from runtime/library calls. Preserve allocation/deallocation sites and annotate them with `!storage` and `!dealloc` metadata for later optimization and diagnostics. Enable static lifetime analysis to verify allocated objects are deallocated before function return or marked as escaped.
+
+##### 1.4 Test Coverage Status
+
+Planned
+
+- positive: file-scope static object and block-scope automatic object
+- positive: block-scope static local
+- positive: heap allocation with deallocation before function return
+- positive: allocation without deallocation marked as escaped
+- negative: incompatible redeclaration of storage class
+- negative: use-after-free (deallocation followed by use)
+- negative: missing deallocation in configured leak-check mode (analysis warning)
 
 #### 1.5 Scope: File, Block, Prototype
 
