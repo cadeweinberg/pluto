@@ -67,5 +67,7 @@ cmake-build*/
 .cache/
 .venv/
 .build/
+*.geany
+*.ll
 
 
