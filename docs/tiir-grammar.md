@@ -37,7 +37,8 @@ This section is normative for TIIR v1. The lexer, parser, and in-memory model sh
 - Tag grammar
   - tag definitions (`tag !id = [ ... ]`)
   - prefix tag usage (`[!id]`) attached to declarations and instructions
-  - generic debug metadata keys (for example: `file`, `line`, `column`), without DWARF node schema requirements
+  - list-form key/value tags (`[!key: value {, !key: value}]`)
+  - generic debug metadata keys (for example: `!file`, `!line`, `!column`), without DWARF node schema requirements
 - Symbol grammar
   - symbol identifiers in both forms: named (`@main`) and numeric (`@0`)
   - global symbol declarations/definitions for constants, variables, and extern functions
@@ -67,11 +68,19 @@ This section is normative for TIIR v1. The lexer, parser, and in-memory model sh
 - The grammar is complete enough to parse and represent the Hello World-style module shown in this document.
 - Every in-scope feature above has at least one canonical TIIR example in this file.
 - No EBNF production is left incomplete for in-scope constructs.
+- The language grammar must remain LL(1) to keep parser implementation simple, readable, and fast.
 - The parser can build a valid in-memory representation for symbols, tags, types, function blocks, and core instructions in this scope.
 
 ## Module Level Metadata
 
 Preliminary v1 listing of required module-level metadata.
+
+Module metadata may be written as either:
+
+- single-entry tag lines: `[!key: value]`
+- list-form tag lines: `[!key: value, !key: value, ...]`
+
+Both forms are equivalent in v1.
 
 ### MLM: Required in v1
 
@@ -130,14 +139,41 @@ Preliminary v1 listing of required module-level metadata.
 [!target_triple: "x86_64-sysV-elf"]
 ```
 
+### MLM: Equivalent List-Form Example
+
+```tiir
+[
+ !version: 1.0, 
+ !module: "hello_world", 
+ !source_language: "C", 
+ !source_standard: "C99", 
+ !source_file: "hello_world.c", 
+ !producer: "charon 0.1.0", 
+ !target_triple: "x86_64-sysV-elf"
+]
+```
+
 ### MLM: v1 Validation Rules
 
 - Exactly one value must be present for each required v1 key.
 - Required keys must appear before symbol/function declarations.
 - Duplicate required keys are a parse/validation error.
+- Metadata key/value entries must use `!id` keys (for example: `!line: 10`).
 - Unknown keys are allowed (forward-compatible), unless marked `required` by a future profile.
 
+### MLM: Preliminary Grammar Spec
+
+```ebnf
+tag_def   = "tag" tag_id "=" "[" tag_list "]" ;
+tag_use   = "[" tag_list "]" ;
+tag_list  = tag_elem {"," tag_elem} ;
+tag_elem  = tag_id [":" literal] ;
+tag_id    = "!" id ;
+```
+
 ## C99 Coverage
+
+Note: this section is provisional and will be fully replaced when the C99 Coverage Matrix is authored.
 
 ```c
 #include <stdio.h>
@@ -152,7 +188,7 @@ int main(void) {
 I was thinking about code that looked like:
 
 ```tiir
-[version: 1.0]
+[!version: 1.0]
 
 [!0]
 symbol @0 : [14 i8] "Hello, World!\0";
@@ -165,22 +201,18 @@ symbol @main : () -> i32:
     call () @puts, (@0)
     ret 0
 
-tag !file = [file: source.c]
-tag !0 = [!file, line: 10, column: 1]
-tag !1 = [!file, line: 12, column: 1]
-tag !2 = [!file, line: 15, column: 1]
+tag !file = [!file: source.c]
+tag !0 = [!file, !line: 10, !column: 1]
+tag !1 = [!file, !line: 12, !column: 1]
+tag !2 = [!file, !line: 15, !column: 1]
 ```
 
 ## EBNF
 
 ```ebnf
 
-tag_def  = "tag" tag_id "[" tag_body "]" ;
-tag_use  = "[" tag_body "]" ;
-tag_body = tag_elem {"," tag_elem} ;
-tag_elem = tag_id | tag_dir ;
-tag_id   = "!" id ;
-tag_dir  = tag_id ":" literal ;
+; non-metadata productions (metadata/tag grammar is defined in
+; "MLM: Preliminary Grammar Spec (LL(1)-friendly)")
 
 literal    = lit_scalar | lit_struct | lit_array | lit_union ;
 lit_struct = "struct" "{" literal {"," literal} "}" ;
