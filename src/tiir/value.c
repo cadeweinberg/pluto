@@ -312,6 +312,57 @@ size_t pluto_value_array_length(pluto_ValueArray array) {
     return array->length;
 }
 
+bool pluto_value_eq(pluto_Value a, pluto_Value b) {
+    if (a->kind != b->kind) { return false; }
+    switch (a->kind) {
+        case PLUTO_VALUE_KIND_NIL:
+            return true;
+        case PLUTO_VALUE_KIND_BOOL:
+            return a->data.b == b->data.b;
+        case PLUTO_VALUE_KIND_I8:
+            return a->data.i8 == b->data.i8;
+        case PLUTO_VALUE_KIND_I16:
+            return a->data.i16 == b->data.i16;
+        case PLUTO_VALUE_KIND_I32:
+            return a->data.i32 == b->data.i32;
+        case PLUTO_VALUE_KIND_I64:
+            return a->data.i64 == b->data.i64;
+        case PLUTO_VALUE_KIND_U8:
+            return a->data.u8 == b->data.u8;
+        case PLUTO_VALUE_KIND_U16:
+            return a->data.u16 == b->data.u16;
+        case PLUTO_VALUE_KIND_U32:
+            return a->data.u32 == b->data.u32;
+        case PLUTO_VALUE_KIND_U64:
+            return a->data.u64 == b->data.u64;
+        case PLUTO_VALUE_KIND_F32:
+            return a->data.f32 == b->data.f32;
+        case PLUTO_VALUE_KIND_F64:
+            return a->data.f64 == b->data.f64;
+        case PLUTO_VALUE_KIND_STRING:
+            return a->data.string_tag == b->data.string_tag;
+        case PLUTO_VALUE_KIND_TUPLE: {
+            if (a->data.tuple.length != b->data.tuple.length) { return false; }
+            for (size_t i = 0; i < a->data.tuple.length; ++i) {
+                if (!pluto_value_eq(a->data.tuple.values[i], b->data.tuple.values[i])) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        case PLUTO_VALUE_KIND_ARRAY: {
+            if (a->data.array.length != b->data.array.length) { return false; }
+            for (size_t i = 0; i < a->data.array.length; ++i) {
+                if (!pluto_value_eq(a->data.array.values[i], b->data.array.values[i])) {
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
 void pluto_value_print(FILE *out, pluto_Value value, struct _pluto_Context *ctx) {
     assert(value != NULL);
     switch (value->kind) {
