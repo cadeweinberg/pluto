@@ -74,6 +74,8 @@ void pluto_value_array_append(pluto_ValueArray array, pluto_Value value);
 pluto_Value pluto_value_array_at(pluto_ValueArray array, size_t index);
 size_t pluto_value_array_length(pluto_ValueArray array);
 
+bool pluto_value_eq(pluto_Value a, pluto_Value b);
+
 struct _pluto_Context;
 void pluto_value_print(FILE *out, pluto_Value value, struct _pluto_Context *ctx);
 

@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: MIT
 
+/*!
+ * \file support/cli_parser.c
+ * \brief pluto_CliParser implementation
+ */
+
 #include <assert.h>
 #include <stddef.h>
 #include <string.h>

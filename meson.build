@@ -14,18 +14,25 @@ support = library(
   include_directories: [include_dir],
 )
 
-context = library(
-  'pluto-context',
-  ['src/context/context.c', 'src/context/string_interner.c'],
-  include_directories: [include_dir],
-  link_with: [support],
-)
-
 tiir = library(
   'pluto-tiir',
-  ['src/tiir/operand.c', 'src/tiir/value.c'],
+  [
+    'src/tiir/operand.c',
+    'src/tiir/value.c',
+  ],
   include_directories: [include_dir],
   link_with: [support, context],
+)
+
+context = library(
+  'pluto-context',
+  [
+    'src/context/context.c',
+    'src/context/string_interner.c',
+    'src/context/value_interner.c',
+  ],
+  include_directories: [include_dir],
+  link_with: [support, tiir],
 )
 
 executable('charon', 'src/main.c', include_directories: include_dir)
@@ -67,6 +74,15 @@ test_si = executable(
   dependencies: [cmocka],
 )
 test('string-interner', test_si)
+
+test_operand = executable(
+  'test-operand',
+  ['tests/src/tiir/operand.c'],
+  include_directories: [include_dir],
+  link_with: [support, context, tiir],
+  dependencies: [cmocka],
+)
+test('operand', test_operand)
 
 test_value = executable(
   'test-value',

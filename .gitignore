@@ -61,7 +61,7 @@ docs/latex/
 subprojects/*
 build/
 out/
-cmake-build-*/
+cmake-build*/
 .vscode/
 .continue/
 .cache/
