@@ -173,51 +173,342 @@ tag_id    = "!" id ;
 
 ## C99 Coverage
 
-Note: this section is provisional and will be fully replaced when the C99 Coverage Matrix is authored.
+Coverage matrix authoring format using sections and subsections (no tables).
+
+### Matrix Entry Template
+
+#### X.Y Feature
+
+#### X.Y Representative C Snippet
+
+#### X.Y TIIR Canonical Form
+
+#### X.Y Grammar Productions Required
+
+#### X.Y In-Memory Nodes Required
+
+#### X.Y Semantic Validation Rules
+
+#### X.Y Lowering Notes (Target Independent)
+
+#### X.Y Test Coverage Status
+
+### 1. Translation Unit and Linkage Model
+
+#### 1.1 Source File as Translation Unit
+
+##### 1.1 Feature
+
+A single C source file (after preprocessing) is treated as one translation unit. TIIR should represent this as one module with module-level metadata and an ordered declaration/definition stream.
+
+##### 1.1 Representative C Snippet
 
 ```c
-#include <stdio.h>
-#include <stdlib.h>
+/* hello.c */
+extern int puts(const char *);
 
 int main(void) {
-    puts("Hello, World!");
-    return EXIT_SUCCESS;
+  return puts("hello");
 }
 ```
 
-I was thinking about code that looked like:
+##### 1.1 TIIR Canonical Form
 
 ```tiir
 [!version: 1.0]
+[!module: "hello"]
+[!source_language: "C"]
+[!source_standard: "C99"]
+[!source_file: "hello.c"]
+[!target_triple: "x86_64-sysV-elf"]
 
-[!0]
-symbol @0 : [14 i8] "Hello, World!\0";
-
-[!1]
-symbol @puts: (ptr) -> ();
-
-[!2]
+symbol @puts : (ptr) -> i32;
 symbol @main : () -> i32:
-    call () @puts, (@0)
-    ret 0
-
-tag !file = [!file: source.c]
-tag !0 = [!file, !line: 10, !column: 1]
-tag !1 = [!file, !line: 12, !column: 1]
-tag !2 = [!file, !line: 15, !column: 1]
+  %0 = call (ptr) -> i32 @puts, ("hello")
+  ret %0
 ```
+
+##### 1.1 Grammar Productions Required
+
+- module header/tag-use productions in the MLM section
+- top-level declaration list (symbol declarations and function definitions)
+- ordering-preserving module parse rule
+
+##### 1.1 In-Memory Nodes Required
+
+- module node
+- module metadata collection keyed by `!id`
+- top-level symbol table (externs + definitions)
+- ordered top-level declaration/definition list
+
+##### 1.1 Semantic Validation Rules
+
+- exactly one effective module header per translation unit
+- required module metadata keys must exist before first top-level symbol/function
+- multiple definitions of the same non-inline object/function in one translation unit are invalid
+- unresolved extern declarations are allowed at translation-unit scope
+
+##### 1.1 Lowering Notes (Target Independent)
+
+Treat translation unit boundaries as compilation boundaries for symbol visibility and diagnostics.
+Preserve unresolved extern symbols for later link-time resolution.
+
+##### 1.1 Test Coverage Status
+
+Planned
+
+- positive: one source file with extern declaration and one function definition
+- negative: missing required module metadata
+- negative: duplicate non-inline definition in the same translation unit
+
+#### 1.2 Declarations vs Definitions
+
+##### 1.2 Feature
+
+In C99, a declaration introduces a name and type; a definition additionally allocates storage for an object or provides a function body. For object declarations in this matrix pass, treat presence of an initializer as a practical definition signal. Multiple compatible declarations are allowed in one translation unit, but only one non-tentative definition per object/function is allowed.
+
+##### 1.2 Representative C Snippet
+
+```c
+extern int g;
+extern int g;
+int g = 42;
+
+int f(void);
+int f(void) {
+  return g;
+}
+```
+
+##### 1.2 TIIR Canonical Form
+
+```tiir
+symbol @g : i32 extern;
+symbol @g : i32 extern;
+symbol @g : i32 = 42;
+
+symbol @f : () -> i32;
+symbol @f : () -> i32:
+  ret @g
+```
+
+##### 1.2 Grammar Productions Required
+
+- symbol declaration form without initializer/body
+- symbol definition form with initializer (objects) or body (functions)
+- repeated top-level declarations for the same symbol name
+
+##### 1.2 In-Memory Nodes Required
+
+- symbol entry with declaration/definition state
+- optional initializer payload for objects
+- optional body payload for functions
+- redeclaration chain (or list of declaration sites) per symbol
+
+##### 1.2 Semantic Validation Rules
+
+- compatible repeated declarations are allowed
+- incompatible redeclarations are invalid
+- at most one non-tentative definition per symbol in a translation unit
+- object declaration with initializer is a definition
+- function declaration without body is not a definition
+- function declaration with body is a definition
+
+##### 1.2 Lowering Notes (Target Independent)
+
+Emit at most one storage-producing object definition per symbol in module output. Preserve declaration-only symbols as unresolved extern-compatible entries for later link resolution.
+
+##### 1.2 Test Coverage Status
+
+Planned
+
+- positive: multiple compatible declarations plus one definition
+- negative: multiple object definitions in one translation unit
+- negative: incompatible redeclaration type mismatch
+- positive: function prototype followed by one function body
+
+#### 1.3 External, Internal, and No Linkage
+
+#### 1.4 Storage Duration: Static, Automatic, Allocated
+
+#### 1.5 Scope: File, Block, Prototype
+
+#### 1.6 Identifier Namespaces
+
+### 2. Preprocessing and Lexical Surface
+
+#### 2.1 Trigraphs and Digraphs
+
+#### 2.2 Universal Character Names
+
+#### 2.3 Line Splicing
+
+#### 2.4 Comments (Block and Line)
+
+#### 2.5 Preprocessing Tokens and Token Boundaries
+
+#### 2.6 Macro Expansion Conformance Requirements
+
+#### 2.7 Conditional Inclusion
+
+#### 2.8 Include Model and Header Search Behavior
+
+### 3. Type System Core
+
+#### 3.1 Void
+
+#### 3.2 Character Types
+
+#### 3.3 Integer Types
+
+#### 3.4 Boolean Type
+
+#### 3.5 Enumerated Types
+
+#### 3.6 Floating Types
+
+#### 3.7 Complex Types
+
+#### 3.8 Qualified Types: const, volatile, restrict
+
+#### 3.9 Derived Types: Pointers, Arrays, Functions
+
+#### 3.10 Incomplete vs Completed Types
+
+#### 3.11 Type Compatibility and Composite Type Rules
+
+### 4. Declarations and Declarators
+
+#### 4.1 Declaration Specifiers
+
+#### 4.2 Init Declarator Lists
+
+#### 4.3 Pointer Declarators
+
+#### 4.4 Array Declarators (Including Parameter Qualifiers)
+
+#### 4.5 Function Declarators and Prototypes
+
+#### 4.6 Abstract Declarators and Typedef Names
+
+#### 4.7 Struct and Union Declarations
+
+#### 4.8 Enum Declarations
+
+#### 4.9 Bit-Fields
+
+#### 4.10 Flexible Array Members
+
+### 5. Initialization
+
+#### 5.1 Scalar Initialization
+
+#### 5.2 Aggregate Initialization
+
+#### 5.3 Designated Initializers
+
+#### 5.4 Nested Designators
+
+#### 5.5 Zero Initialization Defaults
+
+#### 5.6 String Literal Initialization for Char Arrays
+
+#### 5.7 Compound Literals
+
+### 6. Expressions and Conversions
+
+#### 6.1 Primary Expressions
+
+#### 6.2 Postfix Operators
+
+#### 6.3 Unary Operators
+
+#### 6.4 Cast Expressions
+
+#### 6.5 Multiplicative, Additive, and Shift Expressions
+
+#### 6.6 Relational and Equality Expressions
+
+#### 6.7 Bitwise and Logical Expressions
+
+#### 6.8 Conditional Operator
+
+#### 6.9 Assignment and Compound Assignment
+
+#### 6.10 Comma Operator
+
+#### 6.11 Lvalue/Rvalue and Modifiable Lvalue Rules
+
+#### 6.12 Integer Promotions and Usual Arithmetic Conversions
+
+#### 6.13 Pointer Conversions and Null Pointer Constants
+
+### 7. Statements and Control Flow
+
+#### 7.1 Labeled Statements
+
+#### 7.2 Compound Statements
+
+#### 7.3 Expression and Null Statements
+
+#### 7.4 Selection Statements: if/else, switch
+
+#### 7.5 Iteration Statements: while, do-while, for
+
+#### 7.6 Jump Statements: goto, continue, break, return
+
+#### 7.7 Switch case/default Semantics and Fallthrough
+
+### 8. Functions and Calls
+
+#### 8.1 Function Definition Structure
+
+#### 8.2 Old-Style vs Prototype Declarations
+
+#### 8.3 Parameter Passing and Default Promotions
+
+#### 8.4 Variadic Functions and va_list Interoperability
+
+#### 8.5 Return Value Semantics (Including Struct/Union Return)
+
+#### 8.6 Recursion and Reentrancy Assumptions
+
+### 9. Objects, Memory, and Layout Semantics
+
+#### 9.1 Object Representation and Alignment
+
+#### 9.2 Padding and Trap Representations
+
+#### 9.3 Strict Aliasing Constraints
+
+#### 9.4 Effective Type Rules
+
+#### 9.5 Sequence Points and Side-Effect Ordering
+
+#### 9.6 Volatile Access Semantics
+
+### 10. Diagnostics and Constraints
+
+#### 10.1 Required Diagnostics for Constraint Violations
+
+#### 10.2 Undefined, Unspecified, and Implementation-Defined Behavior
+
+#### 10.3 Translation Limits Affecting Frontend and IR Generation
+
+### 11. Runtime and Library Boundary
+
+#### 11.1 Hosted vs Freestanding Assumptions
+
+#### 11.2 Startup and Entry-Point Model
+
+#### 11.3 Builtin/Runtime Hooks Needed by Lowering
+
+#### 11.4 C Library Declarations as Extern Symbols in TIIR
 
 ## EBNF
 
 ```ebnf
 
-; non-metadata productions (metadata/tag grammar is defined in
-; "MLM: Preliminary Grammar Spec (LL(1)-friendly)")
-
-literal    = lit_scalar | lit_struct | lit_array | lit_union ;
-lit_struct = "struct" "{" literal {"," literal} "}" ;
-lit_array  = 
-lit_scalar = integer | float | string |pointer
 ```
 
 ## Questions
