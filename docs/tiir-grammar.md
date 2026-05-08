@@ -24,8 +24,15 @@
 - Metadata attachment: prefix tag-use blocks.
 - Metadata key syntax: all metadata tags use `!id` prefix (e.g., `!version`, `!storage`, `!linkage`).
 - Symbol identity: both named and numeric symbols; global symbols use `@` prefix, local (block-scoped) symbols use `%` prefix.
+- local symbols which are numeric are considered unnamed symbols, and their numbering begins from 0, all numbered locals within
+  a given scope share the same pool of numbers, e.g. parameters, basic-blocks, virtual registers and local stack space.
 - Debug metadata: generic tag schema for v1, not DWARF-specific node schema.
 - Grammar LL(1) compliance: parser must be implementable as recursive-descent without lookahead conflict.
+- instructions use a standard layout e.g. `add i32 %4, %a, 5`
+- instructions are annotated with a type, this type is shared among all operands to the instruction. (except for particular instructions,
+  such as load, which expects a pointer type to load from, etc.)
+- instructions destination is always the leftmost operand, and it always introduces a new name to the local scope. (except for particular
+  instructions such as 'ret' which only consume operands. e.g. `ret %3` etc.)
 
 ## v1 Scope (Locked)
 
@@ -231,8 +238,9 @@ int main(void) {
 [!target_triple: "x86_64-sysV-elf"]
 
 symbol @puts : (ptr) -> i32;
+symbol @0 : [6 i8] "hello"
 symbol @main : () -> i32:
-  %0 = call (ptr) -> i32 @puts, ("hello")
+  call (ptr) -> i32 %0, @puts, (@0)
   ret %0
 ```
 
@@ -424,7 +432,9 @@ Planned
 
 ##### 1.4 Feature
 
-C99 object lifetime is governed by storage class and duration, which are semantically coupled. Static storage objects exist for the entire program; automatic storage objects exist for their enclosing block scope; allocated storage objects are created/destroyed via runtime APIs (`malloc`/`free`). TIIR encodes storage semantics in a unified `!storage` metadata tag on declarations. Allocation sites are marked with `!storage: allocated`, and deallocation sites (free/delete calls) are marked with `!dealloc: allocated_ptr` to enable lifetime verification and leak detection passes.
+C99 object lifetime is governed by storage class and duration, which are semantically coupled. Static storage objects exist for the entire program; automatic storage objects exist for their enclosing block scope; allocated storage objects are created/destroyed via runtime APIs (`malloc`/`free`). TIIR encodes storage semantics in a unified `!storage` metadata tag on declarations. Allocation sites are marked with `!storage: alloc`, and deallocation sites (free/delete calls) are marked with `!storage: free` or `!storage: escape` to enable lifetime verification and leak detection passes. global storage space is implicitly `static`.
+local storage space is implicitly `auto`. pointers allocated by malloc, calloc, and realloc are implicitly `alloc`. calls to free mark the pointer as
+`free`, and returing the pointer from the function marks the pointer as `escape`. This requires no syntax.
 
 ##### 1.4 Representative C Snippet
 
@@ -438,26 +448,41 @@ int f(void) {
   free(p);
   return gs;
 }
+
+int *g(void) {
+  return malloc(sizeof(int));
+}
 ```
 
 ##### 1.4 TIIR Canonical Form
 
 ```tiir
-symbol @gs : i32 = 1 [!storage: static, !linkage: internal];
+symbol @gs : i32 = 1 [!linkage: internal];
 
 symbol @f : () -> i32 [!linkage: external]:
-  symbol %a : i32 = 0 [!storage: automatic];
-  %p = call (i64) -> ptr @malloc, (sizeof(i32)) [!storage: allocated]
-  store (add (load @gs), (load %a)), %p
-  call (ptr) -> void @free, (%p) [!dealloc]
-  ret (load @gs)
+  alloca i32 %a 
+  store i32 %a, 0
+  call (i64) -> ptr, %p, @malloc, (4)
+  load i32 %0, @gs
+  load i32 %1, %a
+  add i32 %2, %0, %1
+  store i32 %p, %2
+  call (ptr) -> void @free, (%p)
+  ret %0
+
+symbol @g : () -> ptr [!storage: static, !linkage: external]:
+  call (i64) -> ptr, %0, @malloc, (4)
+  ret %0
+
 ```
 
 ##### 1.4 Grammar Productions Required
 
+**optional**:
+
 - symbol declarations with inline metadata tags
 - metadata key/value entries for `!storage` (valid values: static, automatic, allocated)
-- metadata key/value entries for deallocation point annotation (`!dealloc: allocated_ptr`)
+- metadata key/value entries for deallocation point annotation (`!dealloc`)
 - call/store/load forms sufficient to express allocated object usage through pointers
 
 ##### 1.4 In-Memory Nodes Required
@@ -496,6 +521,118 @@ Planned
 - negative: missing deallocation in configured leak-check mode (analysis warning)
 
 #### 1.5 Scope: File, Block, Prototype
+
+#### 1.5 Feature
+
+Foe each entity that an identifier designates, the identifier is visible only
+within a region of text, known as it's `scope`. C99 defines four kinds of scope:
+function, file, block, and function prototype. A label name is the only kind of
+identifier that has function scope. it can be used in a `goto` statement anywhere in
+the function in which it appears.
+
+For every other kind of identifier it's placement in the source text determines its scope.
+if it appears outisde of any block or list of parameters, the identifier has `file` scope.
+it is visible from the point of its declaration/definition until the end of the current
+translation unit. if the identifier appears within a block, or a list of parameters, it has
+`block` scope, it lasts until the termination of the associated block. if the identifier appears
+within a function prototype, then it has `function prototype` scope, which ends at the
+end of the function declarator.
+
+If an identifier designates two different entities in the same name space, the scopes might
+overlap. If so, the scope of one entity, the `inner` scope will be a strict subset of the scope
+of the other entity, the `outer` scope. Within the inner scope, the identifier designates the
+entity declared in the inner scope; the entity declared in the outer scope is `hidden` and not
+visible within the inner scope.
+
+#### 1.5 Representative C Snippet
+
+```c
+void f(int a /* function prototype scope */, int b);
+/* a and b are `out of scope` or equivalently their `lifetime` has ended */
+
+int c = 42; /* global scope */
+
+int h(int i /* block scope */, int j) {
+  int k = i * 2 + 4; /* block scope */
+
+  {
+    int k = k + j; 
+    /* block scope, k `hides` 
+      the outer definition of k while within 
+      this inner scope
+     */
+    /* inner k's scope ends at this brace */
+  }
+
+  /* c is visible because it is declared within an outer scope */
+  return f(k + c, k);
+  /* i, j, k all fall out of scope at this brace */
+}
+```
+
+#### 1.5 TIIR Canonical Form
+
+```tiir
+symbol @f : (i32, i32) -> (); [!linkage: external]
+
+symbol @c : i32 = 42; [!linkage: internal]
+
+symbol @h : (%i : i32, %j: i32) -> i32 [!linkage: external]:
+%h_bb0:
+  alloca i32 %k
+  mul i32 %1, %i, 2
+  add i32 %2, %1, 4
+  store i32 %k, %2
+  b %h_bb1
+
+%h_bb1:
+  load i32 %4, %k
+  add i32 %5, %4, %j
+  alloca i32 %k
+  store i32 %k, %5
+  dealloca i32 %k
+  b %h_bb2
+
+%h_bb2:
+  load i32 %6, %k
+  load i32 %7, @c
+  add i32 %8, %6, %7
+  call (i32, i32) -> i32 %9, @f, (%8, %6)
+  dealloca i32 %k
+  ret %9
+```
+
+#### 1.5 Grammar Productions Required
+
+none
+
+#### 1.5 In-Memory Nodes Required
+
+- alloca/dealloca instruction pair, for managing stack allocations.
+- the scope of local names within a function body needs to account for
+  name shadowing. with alloca/dealloca we have clear scope boundaries.
+  the name is introduced with alloca, and falls out of scope with dealloca.
+  what if a name is introduced by another instruction?
+  we could say names aren't allowed to be introduced by other instructions.
+  we could say that the most recent definition is the visible one,
+    that leaves open the question of a 'closing-brace' as it were.
+  we could say names aren't allowed to be reused, and push that issue into
+    the implementation of charon, to rename shadowed locals in order to
+    lower into tiir.
+  we can't say that a local name is only visible within the basic block that
+    it is declared in, because a basic block != a 'block' in the C language.
+    because control flow can go back into an outer block in c. whereas in
+    tiir there is no such thing
+
+#### 1.5 Semantic Validation Rules
+
+- file scope definitions are visible for the entire the translation unit from the point
+  of their declaration/defintion.
+- local scope definitions are visible for the lifetime of their declaring block.
+
+#### 1.5 Lowering Notes (Target Independent)
+
+#### 1.5 Test Coverage Status
 
 #### 1.6 Identifier Namespaces
 
