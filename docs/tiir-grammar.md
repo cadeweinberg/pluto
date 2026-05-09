@@ -136,7 +136,8 @@ types, instructions/lifetime, metadata).
 - Fixed array form is `[N T]` with positive compile-time `N`.
 - Runtime-sized array form is `[* T]`.
 - `[* T]` is valid for automatic-storage VLA declarations (function scope) and struct trailing flexible members.
-- VLA lowering requires `alloca` plus matching scope-exit `dealloca`.
+- VLA lowering requires `alloca [* T] %dst, %size` plus matching scope-exit
+  `dealloca`.
 - Flexible array members are struct-only, trailing-only, and not the only named member.
 
 #### 2.5 Qualifiers and Completeness
@@ -160,6 +161,9 @@ types, instructions/lifetime, metadata).
 - Module-level metadata supports required, optional, and forward-compatible unknown keys.
 - Declaration/instruction metadata may be prefix or inline; forms are equivalent in v1.
 - Qualifiers, linkage, storage, and debug/source mapping are represented via metadata tags.
+- Typed metadata contracts are supported via:
+  - `!type: <type_expr>` for type-structured constraints
+  - `!literal: <literal_expr>` for literal-structured constraints
 
 ### 5. Validation Constraints (Complete Current List)
 
@@ -167,6 +171,7 @@ This is the canonical grouped validation checklist for the current TIIR v1
 first pass.
 
 Module and translation unit constraints:
+
 - Exactly one effective module header per translation unit.
 - Required module metadata keys must exist before first top-level symbol/function.
 - Duplicate required module keys are invalid.
@@ -174,6 +179,7 @@ Module and translation unit constraints:
 - Unresolved extern declarations at translation-unit scope are allowed.
 
 Declaration/linkage/storage constraints:
+
 - Compatible repeated declarations are allowed.
 - Incompatible redeclarations are invalid.
 - At most one non-tentative definition per symbol per translation unit.
@@ -192,8 +198,31 @@ Declaration/linkage/storage constraints:
 - Storage metadata on redeclarations must be compatible.
 - Deallocation sites must reference prior allocations.
 - Every `alloca` must have matching `dealloca` on normal scope-exit paths.
+- Declaration metadata for constrained keys must be coherent with scope and
+  declaration kind.
+- Unknown metadata keys are allowed only as forward-compatible annotations, not
+  replacements for constrained core semantics.
+- `!type` metadata values must parse as valid TIIR type expressions.
+- `!literal` metadata values must parse as valid TIIR literal expressions.
+- C init-declarator lists must be flattened to one TIIR symbol declaration per
+  declared symbol.
+- Each flattened declarator initializer must be validated independently against
+  its declared type.
+- Fixed-size array initializers must not exceed declared bound.
+- Runtime-sized arrays `[* T]` cannot use fixed aggregate literal initializers.
+- VLA stack allocation must use explicit runtime size form
+  `alloca [* T] %dst, %size`.
+- VLA size operands must be integer-typed and positive when validated.
+- Incomplete object declarations cannot carry initializers.
+- C pointer declarator depth and qualifier placement must be normalized to TIIR
+  opaque `ptr` plus declaration metadata.
+- Pointer qualifiers from declarators must be preserved in `!qualifiers` where
+  semantically relevant.
+- Pointer declarator normalization must not alter declared symbol category
+  (object vs function) or linkage/storage semantics.
 
 Scope and namespace constraints:
+
 - File-scope names are visible from declaration point to translation-unit end.
 - Local scope names are visible only in declaring block extent.
 - Prototype parameters are scoped only within declaration.
@@ -206,6 +235,7 @@ Scope and namespace constraints:
 - Branch target label must exist in same function.
 
 Type constraints:
+
 - `void` cannot be object type, array element type, or structural member type.
 - Integer literals must be representable in declared integer type.
 - Signed constant-expression overflow is invalid; unsigned wrap is defined.
@@ -232,6 +262,20 @@ Type constraints:
 - `restrict` on non-pointer declarations is invalid.
 - `const` forbids stores through the qualified declaration/reference.
 - Qualifier redeclarations must be compatible.
+- Any pointer declarator form that resolves to pointer object/function-pointer
+  data must lower to TIIR `ptr` type.
+- Pointer-chain depth from C declarators is not represented as nested pointer
+  types in TIIR v1; frontend normalization is authoritative.
+- Parameter array declarators must decay to pointer parameters in TIIR function
+  signatures.
+- Parameter-array qualifier intent must be preserved on lowered pointer
+  parameter metadata.
+- Parameter-only array attributes (for example C99 parameter `static` bound
+  intent) are invalid outside parameter declarator context.
+- If a pointer declaration carries `!type`, pointer use sites (`load`, `store`,
+  `gep`) must be compatible with the declared `!type` contract.
+- For array-parameter-derived pointer constraints, `!type: [N T]` encodes a
+  minimum accessible contiguous-element contract of `N` elements of `T`.
 - Array element type must be complete and non-`void`.
 - Function parameter raw array/function forms must be decayed before TIIR emission.
 - Direct call argument arity/types must match function signature.
@@ -239,6 +283,7 @@ Type constraints:
 - `[* T]` is valid only in function-scope automatic storage or flexible-array-member context.
 - `[* T]` is invalid for file-scope/global symbols.
 - `[* T]` as struct member is valid only for trailing flexible member with at least one prior named member.
+- `alloca [* T]` requires an explicit runtime size operand.
 - Operand-pack element arity/types must match consumer instruction context.
 - `ret` with no operand is valid only for void-returning functions.
 - `ret` with operand is valid only for non-void-returning functions.
@@ -255,11 +300,13 @@ This is the canonical grouped required test checklist for the current TIIR v1
 first pass.
 
 Translation unit / metadata tests:
+
 - positive: source file with extern declaration and one function definition.
 - negative: missing required module metadata.
 - negative: duplicate non-inline definition in one translation unit.
 
 Declaration / linkage / storage tests:
+
 - positive: multiple compatible declarations plus one definition.
 - positive: function prototype then one body.
 - positive: external and internal symbols at file scope.
@@ -270,15 +317,43 @@ Declaration / linkage / storage tests:
 - positive: block-scope static local.
 - positive: heap allocation with deallocation before return.
 - positive: allocation marked escaped.
+- positive: extern + const declaration normalized to linkage + qualifier metadata.
+- positive: static + volatile declaration normalized to internal linkage + qualifier metadata.
+- positive: mixed initialized/uninitialized C init-declarator list flattened to separate TIIR symbol entries.
+- positive: extern declarator list flattened with inherited linkage metadata on each symbol.
+- positive: fixed array declarator initialized with matching-bound aggregate literal.
+- positive: single-level pointer declarator lowered to TIIR `ptr`.
+- positive: multi-level pointer declarator lowered to TIIR `ptr` with preserved
+  qualifier metadata.
+- positive: function-pointer declarator lowered to TIIR pointer-typed symbol.
+- positive: fixed-size object array declarator lowered to `[N T]`.
+- positive: parameter array declarator decays to pointer parameter.
+- positive: parameter-array qualifiers preserved in lowered pointer metadata.
+- positive: parameter static-bound intent preserved as pointer `!type` array
+  contract metadata.
+- positive: pointer `!type` contract validates compatible `gep` base-type usage.
 - negative: multiple object definitions in one translation unit.
 - negative: incompatible redeclaration type mismatch.
 - negative: conflicting linkage redeclarations.
 - negative: multiple external definitions across modules.
 - negative: incompatible storage-class redeclaration.
+- negative: incompatible linkage/qualifier metadata across redeclarations.
+- negative: invalid `restrict` qualifier on non-pointer declaration.
+- negative: initializer type incompatible with declared type.
+- negative: fixed array literal initializer exceeds declared bound.
+- negative: initializer on incomplete object type.
+- negative: fixed literal initializer on runtime-sized array declaration.
+- negative: pointer qualifier conflict across redeclarations.
+- negative: parameter-only array attributes used outside parameter context.
+- negative: invalid `!type` metadata value (not parseable as type expression).
+- negative: invalid `!literal` metadata value (not parseable as literal expression).
+- negative: pointer use (`load`/`store`/`gep`) incompatible with pointer `!type`
+  contract.
 - negative: use-after-free.
 - negative: missing deallocation in leak-check mode.
 
 Scope / namespace / control-flow tests:
+
 - positive: global symbol visible from global and local scopes.
 - positive: local symbol visible in local scope.
 - positive: struct type definition with member access by index or tag.
@@ -293,8 +368,10 @@ Scope / namespace / control-flow tests:
 - negative: incompatible struct redefinition.
 
 Type-system tests:
+
 - positive: void-return function declaration/definition and bare `ret`.
 - positive: pointer parameter for `void *` lowering.
+- positive: pointer declarator normalization keeps call/operand type checks valid.
 - positive: `i8`/`u8` character-lowered declarations and stores.
 - positive: string literal lowered to null-terminated array symbol.
 - positive: integer width/signedness declarations and literals.
@@ -307,7 +384,8 @@ Type-system tests:
 - positive: volatile global access behavior.
 - positive: restrict-qualified pointer parameters.
 - positive: valid call operand-pack matching callee signature.
-- positive: local VLA lowered to `alloca` + scope-exit `dealloca`.
+- positive: local VLA lowered to `alloca [* T] %dst, %size` + scope-exit
+  `dealloca`.
 - positive: valid trailing flexible array member with prior named field(s).
 - positive: forward struct declaration, compatible completion, then object declaration.
 - negative: `ret` operand present in void function.
@@ -329,6 +407,7 @@ Type-system tests:
 - negative: `restrict` on non-pointer type.
 - negative: unknown qualifier atom.
 - negative: incompatible qualifier redeclaration.
+- negative: invalid declarator normalization causing object/function kind mismatch.
 - negative: zero/negative fixed array length.
 - negative: array element type `void`.
 - negative: call argument arity/type mismatch.
@@ -742,7 +821,8 @@ symbol @g : () -> ptr [!storage: static, !linkage: external]:
 - symbol declarations with inline metadata tags
 - metadata key/value entries for `!storage` (valid values: static, automatic, allocated)
 - metadata key/value entries for deallocation point annotation (`!dealloc`)
-- `alloca type %dst` for automatic/VLA stack allocation
+- `alloca type %dst` for fixed-extent automatic stack allocation
+- `alloca [* T] %dst, %size` for VLA stack allocation with runtime extent
 - `dealloca type %src` for explicit end-of-lifetime stack release
 - call/store/load forms sufficient to express allocated object usage through pointers
 
@@ -1891,6 +1971,8 @@ symbol @use_sum2 : (%x: i32, %y: i32) -> i32 [!linkage: external]:
 - operand-pack element count and types must match the consumer instruction
   context (for example call parameter list)
 - `ret` returns either no operand (`ret`) or a single typed operand (`ret %v`)
+- if pointer operands carry `!type` contracts, `gep` base type and
+  load/store element types must be contract-compatible
 - aggregate index access continues to use `gep` with integer index for
   structs, unions, and arrays; tagged structural members may alternatively use
   `%id` selector form
@@ -2159,11 +2241,378 @@ Planned
 
 #### 4.1 Declaration Specifiers
 
+##### 4.1 Feature
+
+C99 declaration specifiers (storage class, base type, qualifiers, and
+struct/union/enum tags) are normalized by charon into TIIR declarations using:
+
+- explicit TIIR type surface (`iN`, `uN`, `f32`, `f64`, `i1`, `ptr`, arrays,
+  function signatures, named structural types)
+- metadata tags for non-type declaration attributes (`!linkage`, `!storage`,
+  `!qualifiers`, and optional extension/profile metadata)
+
+In TIIR, declaration-specifier ordering from C source does not matter; the
+normalized declaration payload is canonicalized by type + metadata.
+
+##### 4.1 Representative C Snippet
+
+```c
+extern const int g;
+static volatile int reg;
+typedef struct Node Node;
+
+struct Node {
+  int value;
+  struct Node *next;
+};
+```
+
+##### 4.1 TIIR Canonical Form
+
+```tiir
+symbol @g : i32 [!linkage: external, !qualifiers: const];
+
+symbol @reg : i32 [!linkage: internal, !qualifiers: volatile];
+
+type @Node = struct;
+type @Node = struct { %value: i32, %next: ptr };
+```
+
+##### 4.1 Grammar Productions Required
+
+- declaration statement forms:
+  - symbol declaration: `symbol @id : type [tag_use] ;`
+  - symbol definition: `symbol @id : type [= initializer] [tag_use] ;`
+  - type declaration/definition: `type @id = type_expr ;`
+- `tag_use` must support declaration-level metadata list syntax
+  (`[!key: value, ...]`)
+- accepted declaration-specifier metadata keys for v1:
+  - `!linkage`
+  - `!storage`
+  - `!qualifiers`
+
+##### 4.1 In-Memory Nodes Required
+
+- declaration node with:
+  - declared symbol/type id
+  - normalized TIIR type expression
+  - declaration metadata map
+  - declaration-vs-definition state
+- redeclaration chain linkage for symbols and named types
+
+##### 4.1 Semantic Validation Rules
+
+- declaration metadata keys must be recognized for constrained keys in v1;
+  unknown keys are allowed only as forward-compatible metadata, not as
+  replacements for core semantics; if strict conformance is requested,
+  unknown keys produce a warning diagnostic
+- linkage/storage/qualifier metadata combinations must be coherent with scope:
+  - `!linkage: internal` is valid for file-scope symbols
+  - `!linkage: none` is used for local/block-scoped declarations
+  - `!storage: automatic` applies to block-scope automatic declarations
+- `!qualifiers` atoms must be from `{const, volatile, restrict}`
+- `restrict` is valid only for pointer-typed declarations
+- repeated declarations of same symbol/type must be compatible by type and
+  constrained metadata semantics
+- declaration specifier conflicts (e.g., incompatible type or incompatible
+  linkage/qualifier set across redeclarations) are invalid
+
+##### 4.1 Lowering Notes (Target Independent)
+
+Charon performs C declaration-specifier parsing and conflict resolution before
+TIIR emission, then emits canonical TIIR declarations with explicit type
+surfaces plus metadata. This keeps TIIR declaration semantics order-insensitive
+and straightforward to validate.
+
+##### 4.1 Test Coverage Status
+
+Planned
+
+- positive: extern + const declaration lowered to `!linkage` + `!qualifiers`
+- positive: static + volatile declaration lowered to internal linkage and
+  volatile qualifier
+- positive: forward named structural declaration then compatible completion
+- negative: incompatible redeclaration type under same symbol
+- negative: invalid `restrict` on non-pointer declaration
+- negative: incompatible linkage/qualifier metadata across redeclarations
+
 #### 4.2 Init Declarator Lists
+
+##### 4.2 Feature
+
+C99 init-declarator lists allow multiple declarators under one declaration
+specifier sequence (for example `int a = 1, b, c = 3;`). TIIR normalizes this
+surface form into one declaration/definition entry per symbol.
+
+Each emitted TIIR symbol declaration carries:
+
+- the fully resolved declared type
+- declaration metadata inherited from declaration specifiers
+- optional initializer payload for that specific declarator
+
+TIIR does not require or preserve comma-separated declarator-list syntax.
+
+##### 4.2 Representative C Snippet
+
+```c
+int a = 1, b, c = 3;
+extern int x, y;
+int arr[3] = {1, 2, 3};
+```
+
+##### 4.2 TIIR Canonical Form
+
+```tiir
+symbol @a : i32 = 1;
+symbol @b : i32;
+symbol @c : i32 = 3;
+
+symbol @x : i32 [!linkage: external];
+symbol @y : i32 [!linkage: external];
+
+symbol @arr : [3 i32] = [1, 2, 3];
+```
+
+##### 4.2 Grammar Productions Required
+
+- TIIR declaration grammar keeps one-symbol-per-declaration forms:
+  - `symbol @id : type [= initializer] [tag_use] ;`
+- C init-declarator-list parsing is frontend-only and must be normalized before
+  TIIR emission
+- initializer forms used in v1 include scalar literals and aggregate literals
+  already defined elsewhere in this spec
+
+##### 4.2 In-Memory Nodes Required
+
+- symbol declaration/definition nodes with optional initializer payload
+- initializer payload nodes for scalar and aggregate forms
+- source-origin linkage (optional) from flattened TIIR declarations back to
+  source declaration group for diagnostics
+
+##### 4.2 Semantic Validation Rules
+
+- each TIIR symbol declaration/definition entry is validated independently after
+  frontend flattening
+- declarator initializer type must be compatible with declared type
+- fixed-size array literal initializers must not exceed declared bound
+- runtime-sized arrays `[* T]` do not accept fixed literal initializers
+- object declarations of incomplete types cannot carry initializers
+- redeclaration/definition state rules from section 1.2 still apply after list
+  flattening
+
+##### 4.2 Lowering Notes (Target Independent)
+
+Charon flattens C init-declarator lists into independent TIIR symbol entries
+while preserving declaration-specifier-derived metadata on each symbol. This
+eliminates C declarator-list parsing complexity from TIIR and keeps validation
+local to single declarations.
+
+##### 4.2 Test Coverage Status
+
+Planned
+
+- positive: mixed initialized/uninitialized declarator list flattened correctly
+- positive: extern declarator list flattened with inherited linkage metadata
+- positive: fixed array declarator initialized with matching bound literal
+- negative: initializer type incompatible with declared type
+- negative: fixed array literal initializer exceeds declared bound
+- negative: initializer on incomplete object type
+- negative: fixed literal initializer on runtime-sized array form
+- negative: VLA alloca missing required runtime size operand.
 
 #### 4.3 Pointer Declarators
 
+##### 4.3 Feature
+
+C99 pointer declarators can express multiple pointer levels and qualifier
+placement through nested declarator syntax (`*`, `const`, `volatile`,
+`restrict`, parenthesized declarator forms, and function-pointer/array-pointer
+combinations).
+
+TIIR v1 uses an opaque pointer model:
+
+- any C pointer-declarator-derived type lowers to TIIR `ptr`
+- pointer qualifier intent is preserved via declaration metadata (for example
+  `!qualifiers`)
+- pointer-chain depth is not represented as nested pointer type structure in the
+  TIIR type surface
+
+##### 4.3 Representative C Snippet
+
+```c
+int *p;
+const int *restrict rp;
+int (**fp)(int);
+```
+
+##### 4.3 TIIR Canonical Form
+
+```tiir
+symbol @p : ptr;
+symbol @rp : ptr [!qualifiers: const, restrict];
+symbol @fp : ptr;
+```
+
+##### 4.3 Grammar Productions Required
+
+- no dedicated pointer-declarator syntax in TIIR text form beyond pointer type
+  keyword `ptr`
+- declaration grammar must allow pointer-qualified metadata through tag lists
+  (`[!qualifiers: ...]`)
+- function-pointer and pointer-to-array declarator complexity is frontend-only;
+  normalized TIIR emits `ptr`
+
+##### 4.3 In-Memory Nodes Required
+
+- pointer type singleton (`ptr`)
+- declaration metadata storage for pointer-related qualifiers
+- optional frontend-origin annotation of original declarator shape for
+  diagnostics/debugging
+
+##### 4.3 Semantic Validation Rules
+
+- any declaration normalized as pointer-derived must use TIIR `ptr`
+- pointer qualifier atoms must satisfy existing qualifier rules
+- pointer redeclarations must be type-compatible (`ptr` with compatible
+  metadata)
+- declarator normalization must preserve declared entity class:
+  - object declarations remain objects
+  - function declarations remain functions
+  - function-pointer objects remain pointer-typed objects
+
+##### 4.3 Lowering Notes (Target Independent)
+
+Charon resolves C pointer declarator syntax and precedence, then emits TIIR
+declarations with `ptr` plus qualifier metadata. Downstream typing remains
+instruction-driven (`load T`, `store T`, `gep BaseType`) under opaque-pointer
+semantics.
+
+##### 4.3 Test Coverage Status
+
+Planned
+
+- positive: single-level pointer declarator lowered to TIIR `ptr`
+- positive: qualifier-bearing pointer declarator lowered with qualifier metadata
+- positive: function-pointer declarator lowered to pointer-typed object symbol
+- negative: pointer qualifier incompatibility across redeclarations
+- negative: normalization bug that changes object/function declaration class
+
 #### 4.4 Array Declarators (Including Parameter Qualifiers)
+
+##### 4.4 Feature
+
+C99 array declarators describe fixed-size arrays, runtime-sized arrays (VLA
+contexts), flexible array members, and parameter-array declarators with
+qualifiers. TIIR normalizes these forms into explicit array types or pointer
+parameters depending on declaration context.
+
+Normalization rules:
+
+- object/file-scope array declarator with constant bound -> `[N T]`
+- runtime-sized automatic/VLA context -> `[* T]`
+- struct trailing flexible member -> `[* T]` (subject to 4.10 constraints)
+- function parameter array declarator -> parameter type `ptr` with preserved
+  qualifier intent in metadata
+
+Parameter-array qualifiers (`const`, `volatile`, `restrict`, and optional C99
+`static` bound intent) are declaration-context attributes, not first-class TIIR
+array type operators.
+
+Pointer parameters may additionally carry structured metadata contracts to
+improve misuse detection. In particular, `!type: [N T]` on a pointer parameter
+declares that the pointer must reference at least `N` contiguous elements of
+type `T` for validated uses.
+
+##### 4.4 Representative C Snippet
+
+```c
+int g[4];
+
+void f(int a[static 8], const int b[restrict]) {
+  (void)a;
+  (void)b;
+}
+
+void vla(int n) {
+  int t[n];
+}
+```
+
+##### 4.4 TIIR Canonical Form
+
+```tiir
+symbol @g : [4 i32];
+
+symbol @f : (
+  %a: ptr [!type: [8 i32]],
+  %b: ptr [!qualifiers: const, restrict]
+) -> void [!linkage: external]:
+  ret
+
+symbol @vla : (%n: i32) -> void [!linkage: external]:
+  alloca [* i32] %t, %n
+  dealloca [* i32] %t
+  ret
+```
+
+##### 4.4 Grammar Productions Required
+
+- fixed array type form: `"[" integer_literal type "]"`
+- runtime-sized array type form: `"[" "*" type "]"`
+- VLA allocation instruction form: `alloca "[" "*" type "]" %dst, %size`
+- declaration metadata support for parameter-array qualifiers/bounds when
+  lowered to pointer parameters (for example `!qualifiers`, optional pointer
+  contracts via `!type`)
+- parameter array declarator syntax itself is frontend-only (charon), not a
+  distinct TIIR surface form
+
+##### 4.4 In-Memory Nodes Required
+
+- array type node for fixed and runtime-sized forms
+- declaration metadata fields for parameter-array-derived qualifiers
+- optional pointer contract field for parsed `!type` metadata type expressions
+
+##### 4.4 Semantic Validation Rules
+
+- fixed array bound `N` must be a positive compile-time integer
+- runtime-sized array form `[* T]` is restricted to allowed contexts (VLA and
+  flexible-array-member contexts)
+- VLA lowering must emit `alloca [* T] %dst, %size` with explicit runtime size
+  operand
+- parameter array declarators must decay to `ptr` in TIIR signature types
+- parameter-array qualifiers must be preserved on lowered pointer parameter
+  metadata
+- parameter-only array declarator attributes (such as C99 `static` in parameter
+  array syntax) are invalid outside parameter declarator context
+- if emitted, pointer `!type` contract metadata must parse as a valid type
+  expression
+- for array-parameter `static N` intent, the lowered pointer contract must be
+  representable as `!type: [N T]` with positive compile-time `N`
+
+##### 4.4 Lowering Notes (Target Independent)
+
+Charon resolves array declarator context before emission. Object arrays remain
+explicit TIIR array types; parameter arrays become pointer parameters with
+metadata contracts. VLA arrays are lowered to runtime-sized array stack
+allocation with explicit `alloca [* T] %dst, %size` + `dealloca` lifetime
+edges.
+
+##### 4.4 Test Coverage Status
+
+Planned
+
+- positive: fixed-size object array declarator lowered to `[N T]`
+- positive: parameter array declarator decays to pointer parameter
+- positive: parameter array qualifier set preserved in pointer metadata
+- positive: parameter `static` bound intent preserved as pointer `!type` array
+  contract metadata
+- positive: compatible `gep` base type accepted under pointer `!type` contract
+- positive: VLA alloca includes explicit runtime size operand
+- negative: non-positive fixed array bound
+- negative: parameter-only array attributes used outside parameter context
+- negative: invalid/non-parseable pointer `!type` contract metadata
+- negative: `gep`/memory use incompatible with pointer `!type` contract
+- negative: VLA alloca emitted without runtime size operand
 
 #### 4.5 Function Declarators and Prototypes
 
