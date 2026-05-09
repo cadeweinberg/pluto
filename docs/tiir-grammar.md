@@ -21,7 +21,7 @@
 
 - v1 scope: core executable IR (not declarations-only).
 - Pointer syntax: opaque ptr keyword.
-- Tuple syntax: implicit tuple types and literals use `( ... )`; tuple elements are positional.
+- Parenthesized operand-pack syntax `( ... )` is reserved for variadic instruction operands only.
 - Aggregate indexing: `gep` accepts integer indices for all aggregates; for structural types with tagged members, `gep` may accept a member tag `%id` and resolve it in the struct-local namespace.
 - Metadata attachment: prefix tag-use blocks.
 - Metadata key syntax: all metadata tags use `!id` prefix (e.g., `!version`, `!storage`, `!linkage`).
@@ -35,8 +35,9 @@
   such as load, which expects a pointer type to load from, etc.)
 - instructions destination is always the leftmost operand, and it always introduces a new name to the local scope. (except for particular
   instructions such as 'ret' which only consume operands. e.g. `ret %3` etc.)
-- instruction operands with variable arity are passed as a tuple literal operand.
-- `call` passes arguments as a tuple literal, and `ret` may return an unnamed aggregate using a tuple literal.
+- instruction operands with variable arity are passed as a parenthesized operand pack.
+- `call` passes arguments using parenthesized operand-pack syntax.
+- automatic storage with block-bounded lifetime uses explicit `alloca` / `dealloca` pairs.
 
 ## v1 Scope (Locked)
 
@@ -60,10 +61,10 @@ This section is normative for TIIR v1. The lexer, parser, and in-memory model sh
   - function signatures and function bodies with local symbol declarations
 - Core executable IR grammar
   - labels/basic blocks
-  - instruction syntax needed for first-pass C99 lowering examples (call, return, branch, load/store, basic arithmetic/compare/cast forms)
-  - tuple operands for call arguments, variadic operand packs, and unnamed aggregate returns
+  - instruction syntax needed for first-pass C99 lowering examples (call, return, branch, load/store, alloca/dealloca, basic arithmetic/compare/cast forms)
+  - parenthesized operand packs for variadic instruction operands (for example call arguments)
 - Type/literal coverage required for first-wave C99 examples
-  - scalar integers/floats/bool, strings, arrays, struct/union literals, tuple types/literals
+  - scalar integers/floats/bool, strings, arrays, struct/union literals
   - opaque pointer type keyword (`ptr`)
 - Lexical features
   - comments
@@ -86,6 +87,259 @@ This section is normative for TIIR v1. The lexer, parser, and in-memory model sh
 - No EBNF production is left incomplete for in-scope constructs.
 - The language grammar must remain LL(1) to keep parser implementation simple, readable, and fast.
 - The parser can build a valid in-memory representation for symbols, tags, types, function blocks, and core instructions in this scope.
+
+## TIIR Specification (Consolidated First Pass)
+
+This subsection consolidates the current TIIR v1 grammar and semantic rules into
+a C99-like layout. It is a first-pass normative index over rules already
+defined later in this document, organized by construct family (scope/visibility,
+types, instructions/lifetime, metadata).
+
+### 1. Translation Unit, Scope, and Visibility
+
+- One TIIR module corresponds to one translation unit with exactly one effective module header.
+- Required module metadata keys must appear before first top-level symbol/function.
+- Global symbols are `@id` and local symbols are `%id`.
+- Linkage is modeled by `!linkage` with `external`, `internal`, `none`.
+- Repeated compatible declarations are allowed; incompatible redeclarations are invalid.
+- At most one non-tentative definition per symbol is permitted per translation unit.
+- Block scope lifetime is explicit through `alloca` / `dealloca` pairs.
+- Labels are function-local; branch targets must resolve in-function.
+- Struct member tags use `%id` but resolve in struct-local member namespace, not block/function scope.
+
+### 2. Type System
+
+#### 2.1 Scalar Types
+
+- Integers are explicit-width `iN`/`uN`; widths currently constrained to `1, 8, 16, 32, 64`.
+- Boolean is `i1`.
+- Floating-point types in v1 are `f32` and `f64`; `f16`/`f128` are extension-gated.
+- Character-family C types lower to integer types; no distinct character primitive in TIIR.
+- Enums lower to integer semantics and may be represented with `enum { @ELEM = value }` type descriptors.
+
+#### 2.2 Pointers, Functions, and Operands
+
+- Pointers use opaque `ptr`.
+- Function type form is `(param_types) -> return_type`.
+- Parenthesized operand packs `( ... )` are instruction-level variadic operand groups, not value literals or type forms.
+- `call` consumes one operand pack for arguments; `ret` returns either no operand or one typed operand.
+
+#### 2.3 Structural Types (Struct/Union/Enum)
+
+- Named structural types are `type @Name = struct ...`, `union ...`, `enum ...`.
+- Struct elements may have optional member tags: `struct { %tag: T, ... }`.
+- `gep` selector may be integer index or `%memberTag` when base type is structural and member tag exists.
+- Member tags must be unique within a structural type; cross-type reuse is allowed.
+
+#### 2.4 Arrays, VLA, and Flexible Array Members
+
+- Fixed array form is `[N T]` with positive compile-time `N`.
+- Runtime-sized array form is `[* T]`.
+- `[* T]` is valid for automatic-storage VLA declarations (function scope) and struct trailing flexible members.
+- VLA lowering requires `alloca` plus matching scope-exit `dealloca`.
+- Flexible array members are struct-only, trailing-only, and not the only named member.
+
+#### 2.5 Qualifiers and Completeness
+
+- Qualifiers are metadata-based via `!qualifiers` with atoms `const`, `volatile`, `restrict`.
+- `restrict` is only valid for pointer-typed declarations.
+- `void` is incomplete and cannot be object type, array element type, or structural member type.
+- Named `struct`/`union` may be declared incomplete then completed once with compatible kind/layout.
+
+### 3. Instructions and Lifetime Semantics
+
+- Core instruction families include control flow, arithmetic/compare, memory access, call/ret, and stack lifetime (`alloca`, `dealloca`).
+- Arithmetic instructions require type-consistent operands of the declared instruction type.
+- Branch conditions must be `i1`; non-`i1` conditions require explicit compare.
+- `alloca` / `dealloca` model block-bounded automatic storage extent.
+- Heap lifetime is represented via allocation/free calls and storage/lifetime metadata.
+
+### 4. Metadata and Annotation Model
+
+- Metadata keys use `!id` syntax.
+- Module-level metadata supports required, optional, and forward-compatible unknown keys.
+- Declaration/instruction metadata may be prefix or inline; forms are equivalent in v1.
+- Qualifiers, linkage, storage, and debug/source mapping are represented via metadata tags.
+
+### 5. Validation Constraints (Complete Current List)
+
+This is the canonical grouped validation checklist for the current TIIR v1
+first pass.
+
+Module and translation unit constraints:
+- Exactly one effective module header per translation unit.
+- Required module metadata keys must exist before first top-level symbol/function.
+- Duplicate required module keys are invalid.
+- Multiple definitions of same non-inline object/function in one translation unit are invalid.
+- Unresolved extern declarations at translation-unit scope are allowed.
+
+Declaration/linkage/storage constraints:
+- Compatible repeated declarations are allowed.
+- Incompatible redeclarations are invalid.
+- At most one non-tentative definition per symbol per translation unit.
+- Object declaration with initializer is a definition.
+- Object declaration without initializer and without extern is tentative definition.
+- Object declaration with extern and no initializer is declaration-only.
+- Function declaration without body is declaration-only; with body is definition.
+- Tentative object definitions not overridden are implicitly zero-initialized.
+- External linkage redeclarations must agree on linkage.
+- No-linkage symbols have no cross-translation-unit visibility.
+- File-scope object defaults to `!storage: static`.
+- Block-scope non-static object defaults to `!storage: automatic`.
+- Block-scope `static` maps to `!storage: static`.
+- Allocated-storage objects are created by allocation operations, not direct declarations.
+- Allocation/free-style lifetime edges must be consistent (no use after free when detectable).
+- Storage metadata on redeclarations must be compatible.
+- Deallocation sites must reference prior allocations.
+- Every `alloca` must have matching `dealloca` on normal scope-exit paths.
+
+Scope and namespace constraints:
+- File-scope names are visible from declaration point to translation-unit end.
+- Local scope names are visible only in declaring block extent.
+- Prototype parameters are scoped only within declaration.
+- Ordinary identifier conflicts within same scope are invalid.
+- Type-tag redefinition must be compatible; incompatible redefinition invalid.
+- Struct/union member tags must be unique per type.
+- `gep ... , %tag` requires structural base type and resolvable member tag.
+- `%tag` selector resolution is in struct scope, not function/block scope.
+- Basic-block labels must be unique per function.
+- Branch target label must exist in same function.
+
+Type constraints:
+- `void` cannot be object type, array element type, or structural member type.
+- Integer literals must be representable in declared integer type.
+- Signed constant-expression overflow is invalid; unsigned wrap is defined.
+- Mixed-width integer arithmetic requires explicit conversion before operation.
+- `i1` literals are only `0` or `1`.
+- Arithmetic operations on `i1` are invalid.
+- `and`/`or`/`xor` on `i1` are valid.
+- Branch condition must be `i1`.
+- Bool conversion must be explicit compare-to-zero form.
+- Enum initializers must be compile-time integer constants.
+- Enum implicit values increment previous resolved value by `+1`.
+- Duplicate enum element names are invalid.
+- Enum values must fit selected underlying integer type.
+- Enum identifiers are referenced as `@id` in operands.
+- Enum name collisions across enums in same translation unit are invalid.
+- In v1, only `f32` and `f64` are valid float types unless extension gate enabled.
+- Floating arithmetic operands must have identical float width.
+- Integer/float mixed operations require explicit conversion.
+- Complex values must use homogeneous two-element structural representation.
+- Dedicated complex opcodes are invalid in v1.
+- Complex component selectors must be valid (`0`/`1` in current representation).
+- Unknown qualifier atoms are invalid.
+- Duplicate qualifier atoms in one qualifier set are invalid.
+- `restrict` on non-pointer declarations is invalid.
+- `const` forbids stores through the qualified declaration/reference.
+- Qualifier redeclarations must be compatible.
+- Array element type must be complete and non-`void`.
+- Function parameter raw array/function forms must be decayed before TIIR emission.
+- Direct call argument arity/types must match function signature.
+- Fixed-size array length must be positive compile-time integer.
+- `[* T]` is valid only in function-scope automatic storage or flexible-array-member context.
+- `[* T]` is invalid for file-scope/global symbols.
+- `[* T]` as struct member is valid only for trailing flexible member with at least one prior named member.
+- Operand-pack element arity/types must match consumer instruction context.
+- `ret` with no operand is valid only for void-returning functions.
+- `ret` with operand is valid only for non-void-returning functions.
+- Named structural types may transition incomplete -> complete at most once per module.
+- Structural completion must preserve declared kind (`struct` vs `union`).
+- Object declarations of incomplete named structural types are invalid until completion.
+- Fixed-size array element type must be complete at declaration time.
+- Flexible array members are struct-only, final-member-only, and not sole named member.
+- Flexible array members carry no explicit constant bound.
+
+### 6. Required Tests (Complete Current List)
+
+This is the canonical grouped required test checklist for the current TIIR v1
+first pass.
+
+Translation unit / metadata tests:
+- positive: source file with extern declaration and one function definition.
+- negative: missing required module metadata.
+- negative: duplicate non-inline definition in one translation unit.
+
+Declaration / linkage / storage tests:
+- positive: multiple compatible declarations plus one definition.
+- positive: function prototype then one body.
+- positive: external and internal symbols at file scope.
+- positive: function with internal linkage.
+- positive: static local variable.
+- positive: extern declaration in function scope.
+- positive: file-scope static object and block-scope automatic object.
+- positive: block-scope static local.
+- positive: heap allocation with deallocation before return.
+- positive: allocation marked escaped.
+- negative: multiple object definitions in one translation unit.
+- negative: incompatible redeclaration type mismatch.
+- negative: conflicting linkage redeclarations.
+- negative: multiple external definitions across modules.
+- negative: incompatible storage-class redeclaration.
+- negative: use-after-free.
+- negative: missing deallocation in leak-check mode.
+
+Scope / namespace / control-flow tests:
+- positive: global symbol visible from global and local scopes.
+- positive: local symbol visible in local scope.
+- positive: struct type definition with member access by index or tag.
+- positive: shadowed local identifier behavior.
+- positive: goto lowered to branch with valid label.
+- negative: global symbol used before declaration.
+- negative: local symbol used before declaration.
+- negative: local symbol visible from global scope.
+- negative: duplicate ordinary identifier in same scope.
+- negative: duplicate member tag/name in one struct type.
+- negative: branch to undefined label.
+- negative: incompatible struct redefinition.
+
+Type-system tests:
+- positive: void-return function declaration/definition and bare `ret`.
+- positive: pointer parameter for `void *` lowering.
+- positive: `i8`/`u8` character-lowered declarations and stores.
+- positive: string literal lowered to null-terminated array symbol.
+- positive: integer width/signedness declarations and literals.
+- positive: max/min representable integer literals.
+- positive: bool conversion and bool branch.
+- positive: enum implicit/explicit values and enum symbol use in compare/branch.
+- positive: `f32` and `f64` arithmetic.
+- positive: float comparison feeding branch.
+- positive: complex add and multiply lowering; real/imag access by `gep`.
+- positive: volatile global access behavior.
+- positive: restrict-qualified pointer parameters.
+- positive: valid call operand-pack matching callee signature.
+- positive: local VLA lowered to `alloca` + scope-exit `dealloca`.
+- positive: valid trailing flexible array member with prior named field(s).
+- positive: forward struct declaration, compatible completion, then object declaration.
+- negative: `ret` operand present in void function.
+- negative: bare `ret` in non-void function.
+- negative: object declared with type `void`.
+- negative: integer literal out of range.
+- negative: mixed-width integer arithmetic without explicit cast.
+- negative: arithmetic on `i1`.
+- negative: branch on non-`i1` without explicit compare.
+- negative: enum identifier used without `@`.
+- negative: duplicate enum element name.
+- negative: non-constant enum initializer.
+- negative: enum explicit value out of underlying-type range.
+- negative: `f16` or `f128` use without extension gate.
+- negative: mixed `f32`/`f64` arithmetic without explicit conversion.
+- negative: dedicated complex opcode.
+- negative: mixed-component complex pair representation.
+- negative: invalid complex component index.
+- negative: `restrict` on non-pointer type.
+- negative: unknown qualifier atom.
+- negative: incompatible qualifier redeclaration.
+- negative: zero/negative fixed array length.
+- negative: array element type `void`.
+- negative: call argument arity/type mismatch.
+- negative: VLA form at file scope.
+- negative: flexible array member not final.
+- negative: flexible array member as only named field.
+- negative: object declaration of incomplete struct type.
+- negative: second incompatible completion of same type name.
+- negative: kind-mismatch completion (`struct` vs `union`).
+- negative: array with incomplete element type.
+- negative: flexible member declared in union.
 
 ## Module Level Metadata
 
@@ -488,11 +742,14 @@ symbol @g : () -> ptr [!storage: static, !linkage: external]:
 - symbol declarations with inline metadata tags
 - metadata key/value entries for `!storage` (valid values: static, automatic, allocated)
 - metadata key/value entries for deallocation point annotation (`!dealloc`)
+- `alloca type %dst` for automatic/VLA stack allocation
+- `dealloca type %src` for explicit end-of-lifetime stack release
 - call/store/load forms sufficient to express allocated object usage through pointers
 
 ##### 1.4 In-Memory Nodes Required
 
 - symbol storage-class attribute enum: STATIC, AUTOMATIC, ALLOCATED
+- stack-allocation instruction nodes (`alloca`, `dealloca`) with scope/lifetime linkage
 - instruction/result metadata attachment for allocated-storage values
 - deallocation site tracking (free/delete call annotation) for lifetime analysis
 - pointer/object-lifetime relationship tracking for analysis passes
@@ -505,13 +762,14 @@ symbol @g : () -> ptr [!storage: static, !linkage: external]:
 - block-scope `static` declarations map to `!storage: static`
 - allocated-storage objects cannot be declared directly as symbols; they arise from allocation operations
 - each allocation call must have a corresponding deallocation site or escape point for soundness checking
+- each `alloca` must have a matching `dealloca` on all normal scope-exit paths for block-scoped lifetime modeling
 - uses after `free` (marked `!dealloc`) are invalid at semantic-analysis level when detectable
 - storage metadata on redeclarations must be compatible
 - deallocation sites must reference previously allocated pointers
 
 ##### 1.4 Lowering Notes (Target Independent)
 
-Lower `!storage: static` objects into module-level data definitions. Lower `!storage: automatic` objects into function-frame storage. Model `!storage: allocated` objects as heap references obtained from runtime/library calls. Preserve allocation/deallocation sites and annotate them with `!storage` and `!dealloc` metadata for later optimization and diagnostics. Enable static lifetime analysis to verify allocated objects are deallocated before function return or marked as escaped.
+Lower `!storage: static` objects into module-level data definitions. Lower `!storage: automatic` objects into explicit stack regions using `alloca` at declaration point and `dealloca` at scope exit. Model `!storage: allocated` objects as heap references obtained from runtime/library calls. Preserve allocation/deallocation sites and annotate them with `!storage` and `!dealloc` metadata for later optimization and diagnostics. Enable static lifetime analysis to verify heap objects are deallocated before function return or marked as escaped, and stack objects are deallocated at scope end.
 
 ##### 1.4 Test Coverage Status
 
@@ -611,10 +869,12 @@ symbol @h : (%i : i32, %j: i32) -> i32 [!linkage: external]:
 
 - global symbol declarations and definitions
 - local symbol declarations and defintitions.
+- stack lifetime instructions for local scope: `alloca` and `dealloca`
 
 #### 1.5 In-Memory Nodes Required
 
 - alloca instruction
+- dealloca instruction
 - global symbols
 - local symbols
 
@@ -624,10 +884,12 @@ symbol @h : (%i : i32, %j: i32) -> i32 [!linkage: external]:
   of their declaration/defintion.
 - local scope definitions are visible for the lifetime of their declaring block.
 - function parameters within a function declaration are only in scope within that declaration.
+- every block-scoped automatic declaration lowered with `alloca` must be paired with
+  `dealloca` when the declaration's scope ends.
 
 #### 1.5 Lowering Notes (Target Independent)
 
-- alloca allocates stack space per the target and stack space is recovered when a function body ends.
+- alloca allocates stack space per the target; dealloca releases stack space at block scope exit.
 - global symbols are allocated in global data per the target. if the target has a zero initialized section,
   then zero initialized globals may be placed into such a section.
 - the scope of local names within a function body needs to account for
@@ -646,10 +908,8 @@ symbol @h : (%i : i32, %j: i32) -> i32 [!linkage: external]:
     tiir there is no such thing, the flow back into an outer scope is modeled
     by flowing into a new basic block. That is how the "after" is modeled.
 
-- the simpler model is alloca for allocation, end function body for deallocation.
-  the way that inner scopes and outer scopes map onto this is by using a different
-  temporary for the inner scope. which is trivial for charon to do.
-  and we avoid dealloca complication.
+- charon inserts `dealloca` on every scope exit edge (including branches that
+  leave a scope) so block lifetime remains explicit in TIIR.
 
 #### 1.5 Test Coverage Status
 
@@ -1510,7 +1770,7 @@ Planned
 - negative: unknown qualifier atom in `!qualifiers`
 - negative: incompatible qualifier redeclaration
 
-#### 3.9 Derived Types: Pointers, Arrays, Functions, Tuples
+#### 3.9 Derived Types: Pointers, Arrays, Functions
 
 ##### 3.9 Feature
 
@@ -1518,8 +1778,9 @@ C99 derived types are mapped into TIIR with explicit, compact forms:
 
 - pointers use the opaque keyword `ptr`
 - arrays use `[N T]` where `N` is a compile-time integer and `T` is element type
+- runtime-sized arrays use `[* T]` in the restricted contexts where C99 allows
+  variable length arrays
 - functions use `(param_types) -> return_type`
-- tuples use `(elem_type_0, elem_type_1, ...)`
 
 Structural aggregate elements may carry optional local member tags:
 
@@ -1533,22 +1794,24 @@ Pointer pointee details are not carried in the `ptr` type itself; pointee
 interpretation is supplied by the instruction that consumes the pointer
 (for example `load T`, `store T`, `gep BaseType`).
 
-Tuple literals use the same delimiter form with value elements:
-
-- type tuple: `(i32, f64, ptr)`
-- literal tuple: `(1, 2.0, @g)`
-
-Parsing disambiguation rule:
-
-- if `(...)` is followed by `->`, it is a function type prefix
-- otherwise, `(...)` with one or more commas is a tuple type/literal
+Parenthesized syntax in instruction operands is treated as a variadic operand
+pack and is not a general-purpose type or literal form.
 
 Instruction operand rules:
 
-- `call` always receives arguments as one tuple operand
-- `ret` may return an unnamed aggregate as a tuple literal operand
+- `call` always receives arguments as one parenthesized operand pack
 - any instruction requiring variable arity receives the variable portion as a
-  tuple operand
+  parenthesized operand pack
+
+C99 variable length arrays (VLAs) are supported only for automatic storage
+within function bodies in v1. They are lowered to `alloca` with runtime extent,
+not emitted as global or static object types.
+
+C99 flexible array members are supported in struct definitions with the
+following constraints:
+
+- the flexible member must be the last member in the struct
+- the flexible member may not be the only named member in the struct
 
 ##### 3.9 Representative C Snippet
 
@@ -1584,21 +1847,17 @@ symbol @sum2 : (%a: i32, %b: i32) -> i32 [!linkage: external]:
 symbol @use_sum2 : (%x: i32, %y: i32) -> i32 [!linkage: external]:
   call (i32, i32) -> i32 %0, @sum2, (%x, %y)
   ret %0
-
-symbol @make_pair : (%x: i32, %y: i32) -> (i32, i32) [!linkage: external]:
-  ret (%x, %y)
 ```
 
 ##### 3.9 Grammar Productions Required
 
 - pointer type keyword: `ptr`
 - array type form: `"[" integer_literal type "]"`
+- runtime/flexible array form: `"[" "*" type "]"`
 - array literal initializer form: `"[" [literal {"," literal}] "]"`
 - function type form: `"(" [param_type_list] ")" "->" type`
-- tuple type form: `"(" type "," [type {"," type}] ")"`
-- tuple literal form: `"(" literal "," [literal {"," literal}] ")"`
-- call argument operand form: tuple literal only
-- var-arity instruction operand form: tuple literal packs variable operands
+- call argument operand form: parenthesized operand pack
+- var-arity instruction operand form: parenthesized operand pack
 - optional vararg marker in function types is deferred to later section/profile
 - `gep type dest, srcPtr, selector` is used for array/aggregate element
   addressing, where `selector` is integer index or `%id` (for tagged structural
@@ -1609,27 +1868,30 @@ symbol @make_pair : (%x: i32, %y: i32) -> (i32, i32) [!linkage: external]:
 - opaque pointer type node (single canonical `ptr` type)
 - array type node: `(length, element_type)`
 - function type node: `(parameter_types, return_type)`
-- tuple type node: ordered element type list
-- tuple literal node: ordered element operand list
+- variadic operand-pack node: ordered operand list (instruction-specific, not a type)
 - optional function-type attribute flags (for example vararg) for future extension
 
 ##### 3.9 Semantic Validation Rules
 
 - `ptr` carries no implicit pointee type; pointer-consuming instructions must
   supply explicit type context
-- array length `N` must be a positive compile-time integer in v1
 - array element type must be complete and non-`void`
 - function return type may be `void` or a non-function type
 - function parameter types may not be raw array/function forms at call boundary;
   charon must lower C parameter decay to `ptr` before TIIR emission
 - direct calls to `@function` must match declared function type arity and types
-- single-element tuples are allowed only with trailing comma syntax (`(T,)`,
-  `(v,)`) to avoid ambiguity
-- tuple literal element count and element types must match the consumer context
-  (for example call parameter list or tuple return type)
-- `ret ( ... )` is valid only when function return type is a tuple type with
-  matching arity and element types
-- aggregate index access continues to use `gep` with integer index for tuples,
+- fixed-size array length `N` must be a positive compile-time integer
+- `[* T]` (VLA form) is valid only for automatic storage declarations lowered
+  to runtime-extent `alloca` within function scope
+- each VLA `alloca` must have a matching `dealloca` at the end of the
+  declaration's scope extent
+- `[* T]` is invalid for file-scope/global symbols
+- `[* T]` as a struct member is valid only as a flexible array member when it
+  is the last member and the struct has at least one other named member
+- operand-pack element count and types must match the consumer instruction
+  context (for example call parameter list)
+- `ret` returns either no operand (`ret`) or a single typed operand (`ret %v`)
+- aggregate index access continues to use `gep` with integer index for
   structs, unions, and arrays; tagged structural members may alternatively use
   `%id` selector form
 
@@ -1643,10 +1905,12 @@ emission. In particular:
   used as data
 - memory operations remain typed at instruction sites (`load T`, `store T`,
   `gep BaseType`) to preserve correctness despite opaque pointers
-- call lowering always emits one tuple argument operand, even for zero/one
+- C99 VLA declarations are lowered to runtime-extent stack allocation
+  (`alloca`) and paired `dealloca` at scope end
+- flexible array members are represented structurally and participate in `gep`
+  element addressing as trailing members
+- call lowering always emits one operand-pack argument group, even for zero/one
   argument calls (`()`, `(arg0,)`)
-- unnamed aggregate return lowering emits `ret ( ... )` when the returned
-  aggregate is tuple-typed
 
 ##### 3.9 Test Coverage Status
 
@@ -1655,17 +1919,241 @@ Planned
 - positive: global array declaration with constant initializer
 - positive: pointer parameter plus `gep`/`load` element access
 - positive: direct function definition and call type-check
-- positive: call argument tuple matches function parameter types
-- positive: tuple-typed function return using `ret ( ... )`
+- positive: call argument operand pack matches function parameter types
+- positive: local VLA lowered to runtime-extent `alloca`
+- positive: local VLA lowered to `alloca` and released by `dealloca` at scope exit
+- positive: struct with trailing flexible array member and at least one prior
+  named member
 - negative: zero or negative array length
 - negative: array element type `void`
 - negative: call argument count/type mismatch versus function signature
-- negative: single-element tuple type/literal without trailing comma
-- negative: tuple return arity/type mismatch with function return type
+- negative: VLA form used at file scope/global symbol
+- negative: flexible array member not in final position
+- negative: flexible array member as only named struct member
+- negative: call operand-pack arity/type mismatch with function signature
 
 #### 3.10 Incomplete vs Completed Types
 
+##### 3.10 Feature
+
+C99 distinguishes incomplete and complete types. TIIR v1 keeps this distinction
+only where it affects structural type declarations and validation.
+
+Type status in TIIR v1:
+
+- always incomplete: `void`
+- may be incomplete then completed: named `struct`/`union` types
+- always complete at emission time: scalar integer/float/bool types,
+  function types, and fixed-size arrays `[N T]`
+- context-dependent completion: runtime-sized arrays `[* T]` (VLA/flexible form)
+
+Runtime-sized array form `[* T]` is permitted only in restricted C99-compatible
+contexts: automatic-storage VLAs and trailing flexible array members.
+
+##### 3.10 Representative C Snippet
+
+```c
+struct Node;                 /* incomplete */
+extern struct Node *head;    /* pointer to incomplete is valid */
+
+struct Node {                /* completion */
+  int value;
+  struct Node *next;
+};
+
+struct Node g_node;          /* requires complete type */
+```
+
+##### 3.10 TIIR Canonical Form
+
+```tiir
+type @Node = struct;
+
+symbol @head : ptr [!linkage: external];
+
+type @Node = struct { %value: i32, %next: ptr };
+
+symbol @g_node : @Node [!linkage: external];
+```
+
+##### 3.10 Grammar Productions Required
+
+- incomplete structural declaration form: `type @id = struct;` and
+  `type @id = union;`
+- completed structural definition form: `type @id = struct { ... };` and
+  `type @id = union { ... };`
+- named type references in declarations must resolve against the type table
+
+##### 3.10 In-Memory Nodes Required
+
+- named type table entry with completion state:
+  - DECLARED_INCOMPLETE
+  - DEFINED_COMPLETE
+- structural payload attached only in DEFINED_COMPLETE state
+- fixup/reference list for declarations that mention a named type before
+  completion
+
+##### 3.10 Semantic Validation Rules
+
+- `void` is incomplete and cannot be used as object type, array element type,
+  or structural member type
+- pointer declarations to incomplete named structural types are allowed
+- object declarations of incomplete named structural types are invalid until the
+  type is completed
+- each named structural type may transition from incomplete to complete at most
+  once per module; incompatible redefinition is invalid
+- completion must preserve type kind (`struct` cannot be completed as `union`,
+  and vice versa)
+- fixed-size array element type must be complete at declaration time
+- VLA form `[* T]` is valid only for automatic storage within function bodies
+- VLA form `[* T]` is invalid for file-scope/global declarations
+- flexible array member form (`[* T]` as struct member) is valid only for the
+  final struct member and only when at least one other named member exists
+
+##### 3.10 Lowering Notes (Target Independent)
+
+Charon may emit incomplete structural declarations when required for forward
+reference fidelity. Verifier/type-resolution passes then validate completion
+before any storage-bearing use of the type. Since TIIR pointers are opaque,
+pointer-typed references can remain valid across the incomplete->complete
+transition without pointer type rewriting.
+
+##### 3.10 Test Coverage Status
+
+Planned
+
+- positive: forward struct declaration followed by one compatible completion
+- positive: pointer symbol to incomplete struct type before completion
+- positive: object declaration after struct completion
+- positive: local VLA declaration in function body
+- positive: valid trailing flexible array member after at least one named field
+- negative: object declaration of incomplete struct type
+- negative: second incompatible completion of same type name
+- negative: kind mismatch completion (`struct` declared, `union` defined)
+- negative: array with incomplete element type
+- negative: VLA declaration at file scope
+- negative: flexible array member as only named field or non-final member
+
 #### 3.11 Type Compatibility and Composite Type Rules
+
+##### 3.11 Feature
+
+C99 compatibility/composite-type intent is preserved in TIIR, but evaluated over
+TIIR's explicit type surface (fixed-width scalars, opaque `ptr`, named
+structural types, fixed arrays, runtime-sized arrays in restricted contexts,
+and explicit function signatures).
+
+TIIR compatibility is used for:
+
+- validating repeated declarations of the same symbol
+- selecting effective type information when declaration + definition pairs are
+  merged
+- verifying call signatures and operand type matching
+
+Composite type in TIIR v1 is the effective merged type chosen from compatible
+declarations. Because TIIR is explicit, most composites are identity merges
+(types already equal after charon lowering).
+
+##### 3.11 Representative C Snippet
+
+```c
+struct S;
+struct S { int x; };
+
+int f(int);
+int f(int a) { return a; }
+
+extern int g;
+int g;
+```
+
+##### 3.11 TIIR Canonical Form
+
+```tiir
+type @S = struct;
+type @S = struct { %x: i32 };
+
+symbol @f : (i32) -> i32;
+symbol @f : (%a: i32) -> i32 [!linkage: external]:
+  ret %a
+
+symbol @g : i32 [!linkage: external];
+symbol @g : i32;
+```
+
+##### 3.11 Grammar Productions Required
+
+- no new syntax forms are required beyond existing type/declaration grammar
+- composite-type behavior is a semantic merge rule over repeated declarations
+- named structural declaration+completion forms from 3.10 participate in
+  compatibility checks
+
+##### 3.11 In-Memory Nodes Required
+
+- per-symbol redeclaration chain with resolved effective type
+- type-compatibility checker over TIIR type graph
+- composite-type resolver producing a canonical effective type for each symbol
+- diagnostic payload for first-mismatch location and mismatch category
+
+##### 3.11 Semantic Validation Rules
+
+- scalar compatibility:
+  - integer types must match exactly in signedness and width (`i32` != `u32`)
+  - floating types must match exactly (`f32` != `f64`)
+  - `i1` is only compatible with `i1`
+- pointer compatibility:
+  - `ptr` is compatible with `ptr` (opaque pointer model)
+- array compatibility:
+  - fixed arrays are compatible iff element types are compatible and lengths
+    are equal
+  - runtime-sized arrays `[* T]` are compatible iff element types are
+    compatible and both sides are runtime-sized form
+  - fixed array and runtime-sized array forms are incompatible
+- function compatibility:
+  - return types must be compatible
+  - parameter counts must match
+  - corresponding parameter types must be compatible
+  - variadic/non-variadic function attributes (when enabled) must match
+- structural compatibility:
+  - named structural types are compatible by resolved type identity after
+    completion checks
+  - completion must preserve kind (`struct` vs `union`)
+  - incompatible completion/redefinition is invalid
+- qualifier compatibility:
+  - redeclared entities must have compatible qualifier sets under
+    `!qualifiers`
+- declaration composite selection:
+  - if declarations are compatible, effective symbol type is their composite
+    (normally identical in TIIR v1)
+  - if declarations are incompatible, declaration set is invalid
+
+##### 3.11 Lowering Notes (Target Independent)
+
+Charon should emit fully normalized explicit types, minimizing ambiguous merge
+cases. TIIR composite resolution therefore primarily acts as a verifier safety
+pass for repeated declarations and forward-completion flows. Any C99 implicit
+compatibility subtleties that survive frontend lowering must be made explicit
+before TIIR emission.
+
+##### 3.11 Test Coverage Status
+
+Planned
+
+- positive: compatible prototype + definition merge for function symbol
+- positive: compatible extern declaration + tentative object definition merge
+- positive: forward struct declaration followed by compatible completion
+- positive: fixed array redeclarations with equal length and element type
+- positive: runtime-sized array redeclarations with compatible element type in
+  allowed contexts
+- negative: integer signedness mismatch across redeclarations (`i32` vs `u32`)
+- negative: float width mismatch across redeclarations (`f32` vs `f64`)
+- negative: fixed-array length mismatch across redeclarations
+- negative: fixed-array vs runtime-sized-array mismatch
+- negative: function parameter count mismatch across redeclarations
+- negative: function parameter type mismatch across redeclarations
+- negative: return type mismatch across redeclarations
+- negative: incompatible struct/union completion or redefinition
+- negative: qualifier incompatibility across redeclarations
 
 ### 4. Declarations and Declarators
 
@@ -1688,6 +2176,84 @@ Planned
 #### 4.9 Bit-Fields
 
 #### 4.10 Flexible Array Members
+
+##### 4.10 Feature
+
+C99 flexible array members are supported for struct declarations in TIIR using
+the runtime-sized array form [* T] as the final member.
+
+Canonical TIIR struct form:
+
+- type @Packet = struct { %len: u32, %data: [* u8] };
+
+Flexible array members are declaration-only shape elements. They describe
+trailing variable-size storage for containing objects.
+
+##### 4.10 Representative C Snippet
+
+```c
+struct Packet {
+  unsigned len;
+  unsigned char data[];
+};
+```
+
+##### 4.10 TIIR Canonical Form
+
+```tiir
+type @Packet = struct { %len: u32, %data: [* u8] };
+
+symbol @process_packet : (%p: ptr) -> void [!linkage: external]:
+%process_packet_bb0:
+  gep @Packet %len_ptr, %p, %len
+  load u32 %len, %len_ptr
+  gep @Packet %data_ptr, %p, %data
+  ret
+```
+
+##### 4.10 Grammar Productions Required
+
+- struct member declaration allows flexible array member form in trailing
+  position:
+  - struct_elem = ["%" id ":"] type
+  - flexible_struct_elem = ["%" id ":"] "[" "*" type "]"
+- flexible_struct_elem is valid only as the final member in struct { ... }
+- union declarations do not allow flexible array members in v1
+
+##### 4.10 In-Memory Nodes Required
+
+- struct member descriptor flag: IS_FLEXIBLE_ARRAY
+- flexible member element type storage
+- verifier support for final-member and minimum-named-member constraints
+
+##### 4.10 Semantic Validation Rules
+
+- flexible array member is permitted only in struct types
+- flexible array member must be the last member in the struct
+- struct containing a flexible array member must have at least one other named
+  member before it
+- flexible array member cannot be the only named member
+- flexible array member declarations do not carry an explicit constant bound
+- object-size reasoning for such structs excludes trailing flexible storage
+  unless an allocation site provides dynamic extent information
+
+##### 4.10 Lowering Notes (Target Independent)
+
+Charon lowers C flexible members to [* T] trailing struct members. Access to
+the flexible member base uses standard gep member selection (by index or tagged
+member name), and element addressing beyond the base is computed with
+additional gep operations. This requires no gep syntax change beyond the already
+adopted selector rules.
+
+##### 4.10 Test Coverage Status
+
+Planned
+
+- positive: valid struct with fixed header fields and trailing flexible member
+- positive: gep resolution to tagged flexible member base
+- negative: flexible member in non-final position
+- negative: flexible member as the only named member
+- negative: flexible member declared in union
 
 ### 5. Initialization
 
@@ -1794,6 +2360,8 @@ Planned
 #### 11.3 Builtin/Runtime Hooks Needed by Lowering
 
 #### 11.4 C Library Declarations as Extern Symbols in TIIR
+
+## TIIR Specification
 
 ## EBNF
 
