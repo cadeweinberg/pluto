@@ -5084,29 +5084,346 @@ sequencing without forced branch insertion when no terminating jump exists.
 
 #### 8.1 Function Definition Structure
 
+##### 8.1 Feature
+
+Function definitions are frontend-structured by charon and lowered into existing
+TIIR function symbols, parameter bindings, basic blocks, and instructions.
+
+No additional function-definition instruction kind is required in TIIR beyond
+existing symbol/function header and body block forms.
+
+##### 8.1 Lowering Notes (Target Independent)
+
+charon emits one function symbol definition header, creates parameter symbols in
+function-local scope, and lowers statements/expressions into existing CFG and
+instruction forms.
+
+##### 8.1 Grammar / In-Memory Impact
+
+- frontend-only parsing of C function-definition syntax
+- TIIR reuses existing function symbol definition form from section 4.5
+- no new core instruction families required
+
+##### 8.1 Validation Notes
+
+- function body must be type-consistent with declared signature
+- all return paths must satisfy return-type constraints
+
 #### 8.2 Old-Style vs Prototype Declarations
+
+##### 8.2 Feature
+
+C99 prototype vs old-style declaration differences are normalized by charon
+before TIIR emission. TIIR function signatures remain explicit and canonical.
+
+No dedicated TIIR old-style declaration form is introduced.
+
+##### 8.2 Lowering Notes (Target Independent)
+
+charon resolves parameter typing/defaulting semantics for non-prototype forms,
+then emits a fully explicit function type/signature in TIIR.
+
+##### 8.2 Grammar / In-Memory Impact
+
+- frontend-only handling for old-style C declarator syntax
+- TIIR reuses explicit function signature grammar from section 4.5
+- no new TIIR node families required
+
+##### 8.2 Validation Notes
+
+- redeclaration compatibility checks apply on normalized explicit signatures
+- incompatible prototype/definition forms are diagnosed pre-emission
 
 #### 8.3 Parameter Passing and Default Promotions
 
+##### 8.3 Feature
+
+Parameter passing rules and default argument promotions are handled by charon
+before call lowering. TIIR call sites always carry explicitly typed operands and
+operand-pack argument lists.
+
+##### 8.3 Lowering Notes (Target Independent)
+
+charon applies required promotions/conversions to call arguments, then emits
+existing TIIR call form with typed function signature and argument operand-pack.
+
+##### 8.3 Grammar / In-Memory Impact
+
+- frontend-only promotion policy handling
+- TIIR reuses existing call syntax: call function_type dest, callee, (args)
+- no new call instruction variants required
+
+##### 8.3 Validation Notes
+
+- argument count/type must match normalized callee signature for non-variadic
+  calls
+- conversion insertion must be explicit before emission where required
+
 #### 8.4 Variadic Functions and va_list Interoperability
+
+##### 8.4 Feature
+
+Variadic functions are not expressible with the current fixed-arity function
+type form, so TIIR adds an explicit variadic marker in function type grammar.
+charon lowers C variadic declarations/calls onto this form.
+
+Proposed TIIR variadic forms:
+
+- function type: (param_types, ...) -> return_type
+- call: call (fixed_param_types, ...) -> return_type dest, callee, (fixed_args,
+  var_args...)
+
+##### 8.4 Lowering Notes (Target Independent)
+
+charon validates fixed-prefix arguments against declared fixed parameters, then
+emits remaining operands in-order as variadic tail arguments in the same
+operand-pack. va_list interoperability remains frontend/runtime-lowering policy
+using existing calls/extern symbols and metadata as needed.
+
+##### 8.4 Grammar / In-Memory Impact
+
+- extends function type grammar with variadic marker ...
+- extends call validation rules to support fixed-prefix + variadic tail
+- no new instruction opcode required; existing call instruction is reused
+
+##### 8.4 Validation Notes
+
+- variadic call must satisfy fixed parameter count/type prefix exactly
+- default argument promotions for variadic tail arguments are applied by charon
+- non-variadic function symbols cannot receive extra call arguments
 
 #### 8.5 Return Value Semantics (Including Struct/Union Return)
 
+##### 8.5 Feature
+
+Return semantics are lowered onto existing ret instruction forms and existing
+type rules.
+
+- void-returning functions use bare ret
+- non-void functions use ret value
+- aggregate return (struct/union) is frontend-lowered using existing ABI policy
+  strategy (direct value return or hidden sret-style pointer parameter), without
+  requiring new core TIIR statement entities
+
+##### 8.5 Lowering Notes (Target Independent)
+
+charon chooses aggregate-return strategy per target/runtime profile and emits
+ordinary parameter/call/ret constructs accordingly. TIIR remains explicit about
+the chosen lowered signature and return operation.
+
+##### 8.5 Grammar / In-Memory Impact
+
+- no new ret instruction kinds required beyond existing ret forms
+- possible signature normalization for aggregate-return lowering is represented
+  using existing function/call type nodes
+
+##### 8.5 Validation Notes
+
+- ret operand presence/type must match lowered function signature
+- all control-flow exit paths must satisfy return constraints
+
 #### 8.6 Recursion and Reentrancy Assumptions
+
+##### 8.6 Feature
+
+Recursion is supported using existing function symbol/call semantics. A
+function's own symbol name is available within its body, enabling direct
+recursive calls after declaration/definition point normalization by charon.
+
+Reentrancy assumptions are target/runtime policy concerns and do not require new
+TIIR core entities.
+
+##### 8.6 Lowering Notes (Target Independent)
+
+charon ensures the enclosing function symbol is resolvable within the function
+body scope for call lowering, so self-calls lower as ordinary call instructions
+to the same global symbol.
+
+##### 8.6 Grammar / In-Memory Impact
+
+- no new grammar productions required
+- no new instruction forms required
+- existing global symbol table and call resolution paths are reused
+
+##### 8.6 Validation Notes
+
+- recursive call signatures must match declared/lowered function signature
+- unresolved self-reference is invalid
+- reentrancy/thread-safety diagnostics remain optional profile checks
 
 ### 9. Objects, Memory, and Layout Semantics
 
 #### 9.1 Object Representation and Alignment
 
+##### 9.1 Feature
+
+TIIR remains target-independent at type surface level, while concrete object
+size, alignment, and field offsets are determined in Pluto using the selected
+target ABI/data model.
+
+Target ABI is authoritative for:
+
+- scalar size/alignment (for example `i32`, `f64`, pointer width)
+- struct/union layout rules
+- stack/object alignment requirements
+- parameter/return object passing layout decisions
+
+##### 9.1 Lowering Notes (Target Independent)
+
+charon emits target-independent TIIR types/symbols; Pluto performs ABI layout
+computation when lowering TIIR to concrete object/memory representations,
+attaching ABI-derived layout metadata to relevant objects/types as needed.
+Existing TIIR entities are reused; layout is a Pluto-lowering interpretation
+layer, not a new core type syntax.
+
+##### 9.1 Grammar / In-Memory Impact
+
+- no new core TIIR type syntax required for ABI layout
+- optional layout metadata payloads may be attached in implementation
+- existing type and symbol nodes are reused
+
+##### 9.1 Validation Notes
+
+- ABI-derived size/alignment must be internally consistent for all emitted
+  objects
+- misaligned object accesses that violate ABI constraints must be diagnosed or
+  lowered via target-defined safe access strategy
+
 #### 9.2 Padding and Trap Representations
+
+##### 9.2 Feature
+
+Padding bytes and trap representations are target/ABI-defined concerns. TIIR
+does not require explicit padding syntax; Pluto layout/initialization lowering
+must account for ABI-required padding and representation hazards.
+
+Additionally, TIIR defines an explicit trap operation for paths that must become
+immediate runtime termination or unreachable behavior.
+
+Proposed forms:
+
+- opcode form: `trap`
+- builtin alternative: `call () -> void %0, @__pluto_trap, ()` (frontend/runtime
+  policy)
+
+##### 9.2 Lowering Notes (Target Independent)
+
+Pluto computes and preserves implicit padding per ABI layout rules when mapping
+aggregate initializers and memory copies. Where trap-representation risk exists,
+Pluto may emit explicit `trap` or configured diagnostics per safety/profile
+policy.
+
+##### 9.2 Grammar / In-Memory Impact
+
+- adds explicit `trap` instruction form (or equivalent builtin lowering path)
+- optional metadata/diagnostic annotations may describe padding-sensitive paths
+
+##### 9.2 Validation Notes
+
+- aggregate initializer lowering must not assign semantic values to padding
+  bytes unless explicitly required by target policy
+- potential trap-representation reads/writes follow configured diagnostic policy
+- emitted `trap` must terminate current control-flow path (no fallthrough)
 
 #### 9.3 Strict Aliasing Constraints
 
+##### 9.3 Feature
+
+Strict aliasing is a language/optimization constraint resolved by charon
+analysis and downstream optimization policy. TIIR memory operations remain
+typed (`load/store/gep`) and provide the base information for alias reasoning
+without introducing new core aliasing syntax.
+
+##### 9.3 Lowering Notes (Target Independent)
+
+charon may attach alias-relevant metadata where needed, but canonical lowering
+continues to use existing pointer/typed memory instructions.
+
+##### 9.3 Grammar / In-Memory Impact
+
+- no new TIIR core grammar required
+- existing typed memory operations and type metadata are reused
+
+##### 9.3 Validation Notes
+
+- aliasing-unsafe transformations are disallowed unless justified by language
+  and profile constraints
+- diagnostics for suspicious aliasing patterns are profile-controlled
+
 #### 9.4 Effective Type Rules
+
+##### 9.4 Feature
+
+Effective type semantics are handled by charon semantic analysis and memory-use
+validation, then reflected through existing typed memory operations in TIIR.
+
+##### 9.4 Lowering Notes (Target Independent)
+
+charon tracks object effective type updates (for example through stores and
+initialization) and ensures emitted `load/store` operations are type-consistent
+with language rules or explicitly diagnosed where policy requires.
+
+##### 9.4 Grammar / In-Memory Impact
+
+- no new TIIR instruction syntax required
+- optional analysis metadata may be attached for effective-type tracking
+
+##### 9.4 Validation Notes
+
+- type-incoherent memory access relative to effective type must be diagnosed or
+  lowered under explicit compatibility policy
+- aggregate/member accesses must remain consistent with computed layout and
+  declared type interpretation
 
 #### 9.5 Sequence Points and Side-Effect Ordering
 
+##### 9.5 Feature
+
+Sequence-point/side-effect ordering constraints are preserved by charon during
+expression lowering to ordered TIIR instruction streams and CFG edges.
+
+##### 9.5 Lowering Notes (Target Independent)
+
+charon linearizes expression evaluation according to C99 sequencing rules,
+ensuring stores/calls/volatile accesses are emitted in semantically correct
+order. Existing TIIR instruction ordering plus explicit branches encode the
+required execution order.
+
+##### 9.5 Grammar / In-Memory Impact
+
+- no new sequencing instruction forms required
+- existing instruction order and CFG structure are reused
+
+##### 9.5 Validation Notes
+
+- unsequenced/undefined side-effect conflicts should trigger diagnostics per
+  configured language conformance level
+- optimization phases must preserve required observable order constraints
+
 #### 9.6 Volatile Access Semantics
+
+##### 9.6 Feature
+
+Volatile semantics are preserved through charon lowering and existing typed
+memory operations, with volatility represented via existing qualifier/metadata
+model.
+
+##### 9.6 Lowering Notes (Target Independent)
+
+charon prevents elimination/reordering of volatile accesses beyond what language
+and target memory model permit. Emitted volatile loads/stores use existing
+memory operations annotated by existing qualifier metadata.
+
+##### 9.6 Grammar / In-Memory Impact
+
+- no new core TIIR volatile opcode required
+- existing `!qualifiers: volatile` and typed load/store forms are reused
+
+##### 9.6 Validation Notes
+
+- volatile object accesses must remain observable in program order per language
+  semantics and target memory model constraints
+- transformations that drop or merge volatile accesses are invalid
 
 ### 10. Diagnostics and Constraints
 
