@@ -2616,13 +2616,509 @@ Planned
 
 #### 4.5 Function Declarators and Prototypes
 
+##### 4.5 Feature
+
+C99 function declarators and prototypes define callable symbol signatures,
+including parameter types, return type, and declaration-vs-definition state.
+TIIR represents callable declarations directly through function type surfaces and
+symbol declarations/definitions.
+
+Normalization rules:
+
+- function declaration without body lowers to declaration-only symbol entry
+- function declaration with body lowers to function definition entry
+- function parameter names in prototypes are source-level only; TIIR function
+  type compatibility is based on ordered parameter type list and return type
+- a parameter declared as `void` in C lowers to an empty parameter list in TIIR
+  function signature type
+
+In TIIR text, function symbols use:
+
+- declaration form: `symbol @id : (param_types) -> return_type;`
+- definition form: `symbol @id : (named_params) -> return_type [tag_use]: ...`
+
+##### 4.5 Representative C Snippet
+
+```c
+int sum(int a, int b);
+
+int sum(int a, int b) {
+  return a + b;
+}
+
+int noop(void);
+```
+
+##### 4.5 TIIR Canonical Form
+
+```tiir
+symbol @sum : (i32, i32) -> i32;
+
+symbol @sum : (%a: i32, %b: i32) -> i32 [!linkage: external]:
+%sum_bb0:
+  add i32 %0, %a, %b
+  ret %0
+
+symbol @noop : () -> i32;
+```
+
+##### 4.5 Grammar Productions Required
+
+- function type form:
+  - `function_type = "(" [type {"," type}] ")" "->" type`
+- function declaration form:
+  - `symbol_decl = "symbol" global_symbol ":" function_type [tag_use] ";"`
+- function definition header form:
+  - `symbol_def = "symbol" global_symbol ":" "(" [param_decl {"," param_decl}] ")" "->" type [tag_use] ":"`
+- parameter declaration form in definition headers:
+  - `param_decl = local_symbol ":" type [tag_use]`
+- body form and label/instruction sequence follow existing statement/block rules
+
+##### 4.5 In-Memory Nodes Required
+
+- function signature type node:
+  - ordered parameter type list
+  - return type
+- function symbol node with declaration/definition state
+- optional parameter symbol list for definition headers (names + types +
+  metadata)
+- optional function body payload (basic blocks + instructions)
+- redeclaration chain for prototype/definition matching
+
+##### 4.5 Semantic Validation Rules
+
+- repeated function declarations must be type-compatible:
+  - same parameter count
+  - pairwise compatible parameter types
+  - compatible return type
+- a function definition must be compatible with prior declarations
+- at most one function definition per symbol is allowed in a translation unit
+- `ret` usage must match declared return type:
+  - `ret` with no operand only for `-> void`
+  - `ret` with one operand only for non-void return types
+- direct `call` argument arity and operand types must match callee signature
+- prototype parameter identifiers (if present in C source) do not create runtime
+  symbols in TIIR declaration-only entries
+
+##### 4.5 Lowering Notes (Target Independent)
+
+Charon resolves full C declarator precedence for function forms (including
+parenthesized declarators and pointer-adjacent syntax), then emits canonical
+TIIR function signatures. Prototype-only declarations remain body-free symbol
+entries; definitions emit named local parameters and block/instruction bodies.
+
+##### 4.5 Test Coverage Status
+
+Planned
+
+- positive: prototype-only declaration lowered to declaration-only function symbol
+- positive: prototype followed by compatible definition
+- positive: `void` parameter list lowers to empty TIIR parameter list `()`
+- positive: call site with matching arity/types accepted
+- negative: function parameter count mismatch across redeclarations
+- negative: function parameter type mismatch across redeclarations
+- negative: return type mismatch across redeclarations
+- negative: second function definition in one translation unit
+- negative: call argument arity/type mismatch against declared callee signature
+- negative: incompatible `ret` form for declared return type
+
 #### 4.6 Abstract Declarators and Typedef Names
+
+##### 4.6 Feature
+
+C99 abstract declarators (declarators without an identifier) and `typedef`
+names are source-surface constructs consumed by charon before TIIR emission.
+TIIR keeps only normalized type expressions and optional named type aliases.
+
+Normalization rules:
+
+- abstract declarators in casts/`sizeof`/compound-literal contexts are resolved
+  to concrete TIIR type expressions before emission
+- pointer/array/function declarator precedence is frontend-resolved and emitted
+  as TIIR canonical type forms (`ptr`, `[N T]`, `[* T]`, `(params) -> ret`)
+- C `typedef` declarations do not produce runtime symbol entries
+- when typedef-name preservation is desired, charon may emit `type @Alias =
+  type_expr;` as an alias declaration in the named type table
+
+##### 4.6 Representative C Snippet
+
+```c
+typedef int i32_t;
+typedef struct Node Node;
+
+struct Node {
+  int value;
+  Node *next;
+};
+
+int cast_demo(void *p) {
+  return *(i32_t *)p;
+}
+```
+
+##### 4.6 TIIR Canonical Form
+
+```tiir
+type @i32_t = i32;
+type @Node = struct;
+type @Node = struct { %value: i32, %next: ptr };
+
+symbol @cast_demo : (%p: ptr) -> i32 [!linkage: external]:
+%cast_demo_bb0:
+  load i32 %0, %p
+  ret %0
+```
+
+##### 4.6 Grammar Productions Required
+
+- alias-capable type declaration form:
+  - `type_decl = "type" global_symbol "=" type ";"`
+- named structural forward/complete declarations remain as defined in 3.10 and
+  4.7
+- no TIIR production is required for C abstract declarator syntax; that parsing
+  is frontend-only
+
+##### 4.6 In-Memory Nodes Required
+
+- named type alias entry: `(name, target_type_expr)`
+- named type table that resolves aliases and structural names
+- optional source-origin attachment for alias/typedef diagnostics
+- no runtime symbol node for typedef declarations
+
+##### 4.6 Semantic Validation Rules
+
+- typedef declarations must not emit TIIR runtime symbols
+- alias target type expression must be a valid TIIR type
+- alias redefinition must be compatible with prior alias/type entry for the
+  same name; incompatible redefinition is invalid
+- alias names participate in named type table resolution and are distinct from
+  function/local symbol scope
+- abstract-declarator-derived types used in casts or operators must be fully
+  normalized before TIIR emission
+
+##### 4.6 Lowering Notes (Target Independent)
+
+Charon should preserve typedef-name spellings only when useful for diagnostics
+or readability. Type checking and instruction typing in TIIR always use the
+resolved canonical type expression, not source typedef spelling.
+
+##### 4.6 Test Coverage Status
+
+Planned
+
+- positive: scalar typedef lowered to `type @Alias = iN`
+- positive: forward typedef to named struct followed by compatible completion
+- positive: abstract declarator in cast context lowers to canonical TIIR type
+- negative: incompatible typedef/alias redefinition
+- negative: typedef incorrectly emitted as runtime `symbol`
+- negative: invalid alias target type expression
 
 #### 4.7 Struct and Union Declarations
 
+##### 4.7 Feature
+
+C99 struct/union declarations map to TIIR named structural type declarations.
+TIIR supports both incomplete declarations and completed definitions.
+
+Canonical forms:
+
+- incomplete declaration: `type @T = struct;` or `type @U = union;`
+- completed definition:
+  - `type @T = struct { [%member: ]type, ... };`
+  - `type @U = union { [%member: ]type, ... };`
+
+Member tags are optional, use `%id` syntax, and are local to the declaring
+struct/union type.
+
+##### 4.7 Representative C Snippet
+
+```c
+struct Node;
+
+struct Node {
+  int value;
+  struct Node *next;
+};
+
+union Bits {
+  int i;
+  float f;
+};
+```
+
+##### 4.7 TIIR Canonical Form
+
+```tiir
+type @Node = struct;
+type @Node = struct { %value: i32, %next: ptr };
+
+type @Bits = union { %i: i32, %f: f32 };
+```
+
+##### 4.7 Grammar Productions Required
+
+- incomplete named structural declarations:
+  - `type_decl = "type" global_symbol "=" "struct" ";"`
+  - `type_decl = "type" global_symbol "=" "union" ";"`
+- completed named structural definitions:
+  - `type_def = "type" global_symbol "=" "struct" "{" struct_elem_list "}" ";"`
+  - `type_def = "type" global_symbol "=" "union" "{" struct_elem_list "}" ";"`
+- structural member form:
+  - `struct_elem = [local_symbol ":"] type`
+- member tags are optional but, when present, must be `%`-prefixed local symbols
+
+##### 4.7 In-Memory Nodes Required
+
+- named structural type table entries with completion state
+- structural payload node:
+  - kind (`struct` or `union`)
+  - ordered member list `(optional_tag, member_type)`
+- per-structure member-tag index map for `%tag` lookup in `gep`
+- compatibility checker for repeated declarations/completions
+
+##### 4.7 Semantic Validation Rules
+
+- named structural types may transition incomplete -> complete at most once per
+  module
+- completion kind must match declaration kind (`struct` cannot complete as
+  `union`, and vice versa)
+- object declarations requiring complete structural layout are invalid before
+  completion
+- member tags must be unique within one structural type
+- `%tag` member selection in `gep` must resolve in the base structural type's
+  member namespace
+- incompatible structural redefinition (member count/order/type/tag mismatch)
+  is invalid
+
+##### 4.7 Lowering Notes (Target Independent)
+
+Charon should emit forward structural declarations only when needed for source
+fidelity or dependency ordering, then emit one compatible completion. Opaque
+pointer semantics (`ptr`) remain independent of structural completion timing.
+
+##### 4.7 Test Coverage Status
+
+Planned
+
+- positive: forward struct declaration followed by one compatible completion
+- positive: union definition with multiple member types
+- positive: member-tagged struct used by `gep ... , %member`
+- negative: incompatible second completion of same structural type name
+- negative: kind-mismatch completion (`struct` declared, `union` completed)
+- negative: duplicate member tag in one structural definition
+- negative: `gep` member tag not found in selected structural base type
+
 #### 4.8 Enum Declarations
 
+##### 4.8 Feature
+
+C99 enum declarations define named integer constants in the ordinary identifier
+namespace. TIIR preserves enum declaration shape for readability and debug
+fidelity while runtime semantics remain integer-typed.
+
+Canonical form:
+
+- `type @EnumName = enum { @E0 = v0, @E1 = v1, ... };`
+
+Enumerator names are emitted as global symbols and referenced as `@id` in
+operands.
+
+##### 4.8 Representative C Snippet
+
+```c
+enum Mode {
+  MODE_A,
+  MODE_B = 4,
+  MODE_C
+};
+
+enum Mode pick(int v) {
+  if (v == 0) return MODE_A;
+  if (v == 1) return MODE_B;
+  return MODE_C;
+}
+```
+
+##### 4.8 TIIR Canonical Form
+
+```tiir
+type @Mode = enum { @MODE_A = 0, @MODE_B = 4, @MODE_C = 5 };
+
+symbol @pick : (%v: i32) -> i32 [!linkage: external]:
+%pick_bb0:
+  eq i32 %0, %v, @MODE_A
+  br %0, %pick_bb_a, %pick_bb1
+
+%pick_bb1:
+  eq i32 %1, %v, @MODE_B
+  br %1, %pick_bb_b, %pick_bb_c
+
+%pick_bb_a:
+  ret @MODE_A
+
+%pick_bb_b:
+  ret @MODE_B
+
+%pick_bb_c:
+  ret @MODE_C
+```
+
+##### 4.8 Grammar Productions Required
+
+- enum type definition form:
+  - `type_def = "type" global_symbol "=" "enum" "{" enum_elem_list "}" ";"`
+- enum element form:
+  - `enum_elem = global_symbol ["=" integer_literal]`
+- comma-separated enum element list with optional trailing comma
+- enum operand references use ordinary global symbol operand form (`@id`)
+
+##### 4.8 In-Memory Nodes Required
+
+- enum type descriptor entry:
+  - enum type name
+  - ordered enumerator list `(name, resolved_value)`
+  - selected underlying integer type
+- global symbol table entries for each enumerator constant
+- resolver map from enumerator name to constant value and symbol entry
+
+##### 4.8 Semantic Validation Rules
+
+- enumerator initializers must be compile-time integer constants
+- implicit enumerator values increment prior resolved value by `+1`
+- duplicate enumerator names within one enum are invalid
+- duplicate enumerator names across enums in one translation unit are invalid
+  (ordinary identifier namespace rule)
+- resolved enumerator values must fit selected underlying integer type
+- enum constants must be referenced with `@id` in TIIR operands
+- TIIR instruction typing for enum values uses integer type compatibility rules
+
+##### 4.8 Lowering Notes (Target Independent)
+
+Charon should resolve all enumerator values before emission and select the
+underlying integer type per target ABI policy. TIIR may keep enum type
+descriptors and symbolic enumerator names, while optimization/codegen can fold
+them to integer immediates as needed.
+
+##### 4.8 Test Coverage Status
+
+Planned
+
+- positive: enum with implicit and explicit value sequence
+- positive: enum constants used in compare/branch and return paths
+- positive: enum declaration retained as named type descriptor
+- negative: non-constant enumerator initializer
+- negative: duplicate enumerator name in same translation unit
+- negative: enumerator value out of range for selected underlying type
+- negative: enum operand used without `@` prefix
+
 #### 4.9 Bit-Fields
+
+##### 4.9 Feature
+
+C99 bit-fields are supported for struct/union member declarations as
+width-constrained integer members. TIIR models bit-field declarations directly
+in structural type definitions, while preserving target-dependent layout policy
+as verifier/lowering metadata.
+
+Canonical TIIR member form:
+
+- named bit-field member: `%name: base_int_type : width`
+- unnamed bit-field member: `base_int_type : width`
+
+Examples:
+
+- `%mode: u32 : 3`
+- `u32 : 5`
+- `u32 : 0` (zero-width separator, unnamed only)
+
+##### 4.9 Representative C Snippet
+
+```c
+struct Flags {
+  unsigned mode : 3;
+  unsigned ready : 1;
+  unsigned : 4;
+  unsigned value : 8;
+};
+```
+
+##### 4.9 TIIR Canonical Form
+
+```tiir
+type @Flags = struct {
+  %mode: u32 : 3,
+  %ready: u32 : 1,
+  u32 : 4,
+  %value: u32 : 8
+};
+
+symbol @read_mode : (%p: ptr) -> u32 [!linkage: external]:
+%read_mode_bb0:
+  gep @Flags %bf_ptr, %p, %mode
+  load u32 %mode, %bf_ptr
+  ret %mode
+```
+
+##### 4.9 Grammar Productions Required
+
+- extend structural member grammar with bit-field declarator form:
+  - `struct_elem = [local_symbol ":"] type`
+  - `bitfield_elem = [local_symbol ":"] integer_type ":" integer_literal`
+- structural element list accepts either `struct_elem` or `bitfield_elem`
+- zero-width separator form is represented by `bitfield_elem` with width `0`
+  and no member tag
+- `bitfield_elem` is valid only in `struct`/`union` member contexts
+
+##### 4.9 In-Memory Nodes Required
+
+- structural member descriptor extension:
+  - `is_bitfield` flag
+  - `base_integer_type`
+  - `bit_width`
+  - optional `member_tag`
+- layout-derived metadata (post-layout pass):
+  - storage unit index/offset
+  - bit offset within storage unit
+- member-tag lookup table must include named bit-field entries for `gep`
+
+##### 4.9 Semantic Validation Rules
+
+- bit-field base type must be an integer type (`iN`, `uN`, or `i1`)
+- bit-field width must be a compile-time non-negative integer
+- for non-zero widths: `1 <= width <= bitwidth(base_integer_type)`
+- zero-width bit-field is valid only for unnamed members
+- named zero-width bit-fields are invalid
+- duplicate member tags within one structural type are invalid, including
+  bit-field members
+- bit-field declarations are valid only inside struct/union type definitions
+- `gep ... , %tag` is valid for named bit-field members and resolves by member
+  tag namespace rules from section 1.6
+- load/store type compatibility for bit-field lvalues must use the declared
+  bit-field base integer type
+
+##### 4.9 Lowering Notes (Target Independent)
+
+Charon should preserve bit-field declarations in structural type descriptors,
+then apply target layout policy during type-layout/verifier passes. Accesses to
+bit-fields may be lowered to canonical mask/shift/update sequences over the
+selected storage unit while preserving source-level member identity.
+
+Zero-width unnamed bit-fields act as layout separators according to target ABI
+policy and must not produce addressable named members.
+
+##### 4.9 Test Coverage Status
+
+Planned
+
+- positive: struct with multiple named bit-fields of compatible widths
+- positive: unnamed non-zero-width bit-field separator member
+- positive: unnamed zero-width bit-field layout separator
+- positive: `gep` member selection by named bit-field tag
+- negative: bit-field width greater than base integer bit width
+- negative: named zero-width bit-field
+- negative: non-integer base type used for bit-field
+- negative: duplicate member tag where one or both are bit-fields
+- negative: bit-field declaration outside struct/union member context
 
 #### 4.10 Flexible Array Members
 
