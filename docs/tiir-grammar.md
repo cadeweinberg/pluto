@@ -604,11 +604,27 @@ symbol @h : (%i : i32, %j: i32) -> i32 [!linkage: external]:
 
 #### 1.5 Grammar Productions Required
 
-none
+- global symbol declarations and definitions
+- local symbol declarations and defintitions.
 
 #### 1.5 In-Memory Nodes Required
 
-- alloca/dealloca instruction pair, for managing stack allocations.
+- alloca instruction
+- global symbols
+- local symbols
+
+#### 1.5 Semantic Validation Rules
+
+- file scope definitions are visible for the entire the translation unit from the point
+  of their declaration/defintion.
+- local scope definitions are visible for the lifetime of their declaring block.
+- function parameters within a function declaration are only in scope within that declaration.
+
+#### 1.5 Lowering Notes (Target Independent)
+
+- alloca allocates stack space per the target and stack space is recovered when a function body ends.
+- global symbols are allocated in global data per the target. if the target has a zero initialized section,
+  then zero initialized globals may be placed into such a section.
 - the scope of local names within a function body needs to account for
   name shadowing. with alloca/dealloca we have clear scope boundaries.
   the name is introduced with alloca, and falls out of scope with dealloca.
@@ -622,45 +638,389 @@ none
   we can't say that a local name is only visible within the basic block that
     it is declared in, because a basic block != a 'block' in the C language.
     because control flow can go back into an outer block in c. whereas in
-    tiir there is no such thing
+    tiir there is no such thing, the flow back into an outer scope is modeled
+    by flowing into a new basic block. That is how the "after" is modeled.
 
-#### 1.5 Semantic Validation Rules
-
-- file scope definitions are visible for the entire the translation unit from the point
-  of their declaration/defintion.
-- local scope definitions are visible for the lifetime of their declaring block.
-
-#### 1.5 Lowering Notes (Target Independent)
+- the simpler model is alloca for allocation, end function body for deallocation.
+  the way that inner scopes and outer scopes map onto this is by using a different
+  temporary for the inner scope. which is trivial for charon to do.
+  and we avoid dealloca complication.
 
 #### 1.5 Test Coverage Status
 
+- positive: global symbol visible from global scope
+- positive: global symbol visible from local scope
+- positive: local symbol visible from local scope
+- negative: global symbol not visible before declaration
+- negative: local symbol not visible before declaration
+- negative: local symbol not visible from global scope
+
 #### 1.6 Identifier Namespaces
+
+##### 1.6 Feature
+
+C99 defines four distinct identifier namespaces (§6.2.3). An identifier can
+designate entities in multiple namespaces simultaneously without conflict;
+the namespace is resolved from context.
+
+1. **Label names**: every function has exactly one label-name namespace.
+   Labels are introduced by a labeled statement (`label:`) and referenced
+   only by `goto`. They have function scope.
+
+2. **Tags**: `struct`, `union`, and `enum` tags share one tag namespace per
+   translation unit. A tag name introduced inside a block has block scope.
+
+3. **Struct/union members**: each struct or union type has its own member
+   namespace, distinct from every other struct/union and from ordinary
+   identifiers.
+
+4. **Ordinary identifiers**: all remaining identifiers — object names,
+   function names, typedef names, enumeration constants — share one
+   ordinary-identifier namespace per scope level.
+
+TIIR collapses these four namespaces into two syntactic prefixes, because
+the IR operates below the C type-name surface:
+
+- `@name` — global ordinary identifiers (file-scope objects, functions,
+  string constants, etc.).
+- `%name` — local ordinary identifiers (parameters, virtual registers,
+  basic-block labels within a function body).
+
+Struct/union member names appear only inside type descriptors and are
+unambiguous by position/tag; they do not share the `@`/`%` identifier
+pools. Tag names are represented as named type definitions and also do not
+share either identifier pool.
+
+##### 1.6 Representative C Snippet
+
+```c
+struct Point { int x; int y; };  /* tag namespace: Point, member namespace: x, y */
+
+typedef struct Point Point;      /* ordinary namespace: Point (typedef) */
+
+int x = 1;                       /* ordinary namespace: x (object) */
+
+int f(int x) {                   /* ordinary namespace: f (function), x (param) */
+  struct Point p;                /* ordinary namespace: p; tag namespace: Point */
+  p.x = x;                      /* member x of struct Point, not ordinary x */
+
+  goto done;                     /* label namespace: done */
+done:
+  return p.x + x;
+}
+```
+
+##### 1.6 TIIR Canonical Form
+
+```tiir
+/* tag namespace: struct Point becomes a named type descriptor */
+type @Point = struct { i32, i32 };
+
+symbol @x : i32 = 1 [!linkage: external];
+
+symbol @f : (%x : i32) -> i32 [!linkage: external]:
+%f_bb0:
+  alloca @Point %p
+  gep @Point %0, %p, 0       /* pointer to member 0 (.x) */
+  store i32 %0, %x
+  b %done
+
+%done:
+  gep @Point %2, %p, 0       /* pointer to member 0 (.x) */
+  load i32 %3, %2
+  add i32 %4, %3, %x
+  ret %4
+```
+
+##### 1.6 Grammar Productions Required
+
+- named type definition form: `type @id = struct { type_list };` (or `union { ... }` for the respective C type kinds)
+- `gep` instruction form: `gep type dest, srcPtr, index` — computes a pointer to the Nth member of a struct/union or element of an array; result is `ptr`
+- basic-block label production (already required for 1.5)
+- ordinary global/local symbol productions (already required for 1.1–1.5)
+
+##### 1.6 In-Memory Nodes Required
+
+- named type table (maps type name `@id` to struct/union type descriptor)
+- struct/union type descriptor: ordered member list with types and optional names
+- `gep` instruction node: base-type reference, destination symbol, source pointer operand, and integer index operand
+- no separate label-namespace node is needed: basic-block label entries in the
+  function body serve this role
+
+##### 1.6 Semantic Validation Rules
+
+- within a single scope level, two ordinary identifiers with the same name are
+  a conflict; TIIR enforces this via unique `@`/`%` symbol names per scope
+- tag names (`type @id`) must be unique in the named-type table; redefinition
+  with the same layout is a no-op (tentative); incompatible redefinition is an
+  error
+- member names within a single struct/union type must be unique; member names
+  across different struct/union types may coincide without conflict
+- basic-block labels within one function must be unique; the same label name
+  may appear in different functions without conflict
+- a `%label` used as a branch target must be declared as a label within the
+  same function body
+
+##### 1.6 Lowering Notes (Target Independent)
+
+C's four-namespace system is resolved entirely by the frontend (charon) before
+emission. By the time TIIR is produced:
+
+- All tag names that survive as allocatable types are emitted as `type @id`
+  definitions.
+- All ordinary names have been uniquified per scope and assigned `@` or `%`
+  prefix identifiers; shadowed names are renamed to fresh temporaries.
+- Member references are lowered to numeric offsets; member names are not
+  retained in the instruction stream.
+- Label names are lowered to basic-block labels; `goto` is lowered to an
+  unconditional branch instruction.
+
+##### 1.6 Test Coverage Status
+
+Planned
+
+- positive: struct type definition with member access by index
+- positive: ordinary identifier at file scope and shadowed local with same name
+- positive: `goto` lowered to unconditional branch using basic-block label
+- negative: duplicate ordinary identifier in same scope
+- negative: duplicate member name within one struct type
+- negative: branch to undefined basic-block label within function
+- negative: incompatible struct redefinition
 
 ### 2. Preprocessing and Lexical Surface
 
-#### 2.1 Trigraphs and Digraphs
-
-#### 2.2 Universal Character Names
-
-#### 2.3 Line Splicing
-
-#### 2.4 Comments (Block and Line)
-
-#### 2.5 Preprocessing Tokens and Token Boundaries
-
-#### 2.6 Macro Expansion Conformance Requirements
-
-#### 2.7 Conditional Inclusion
-
-#### 2.8 Include Model and Header Search Behavior
+This entire section is resolved within charon (the frontend). TIIR is a post-preprocessing, post-lexing IR and is concerned only with C99 semantics, not C99 syntax. Trigraphs, digraphs, universal character names, line splicing, comments, macro expansion, conditional inclusion, and header search are all consumed and discarded before TIIR emission. No TIIR grammar productions or in-memory nodes are required for any item in this section.
 
 ### 3. Type System Core
 
 #### 3.1 Void
 
+##### 3.1 Feature
+
+C99 `void` is an incomplete type with no values. It is used in three contexts:
+
+1. **Function return type**: `void f(void)` — the function produces no value.
+2. **Parameter list**: `f(void)` — the function accepts no arguments (distinct from `f()` which leaves parameters unspecified).
+3. **Generic pointer**: `void *` — a pointer to an object of unknown type, compatible with any object pointer type.
+
+TIIR represents void as the keyword `void`. A function returning void has return type `void`. A void parameter list is represented as an empty parameter list `()`. A generic pointer is `ptr` (the opaque pointer type, already locked in v1 scope).
+
+##### 3.1 Representative C Snippet
+
+```c
+void say_hello(void);       /* void return, void params */
+
+void say_hello(void) {      /* definition */
+    puts("hello");
+}
+
+void *memcopy(void *dst, const void *src, int n); /* void* params and return */
+```
+
+##### 3.1 TIIR Canonical Form
+
+```tiir
+symbol @say_hello : () -> void [!linkage: external];
+
+symbol @say_hello : () -> void [!linkage: external]:
+  call (ptr) -> i32 %0, @puts, (@str_hello)
+  ret
+
+symbol @memcopy : (ptr, ptr, i32) -> ptr [!linkage: external];
+```
+
+##### 3.1 Grammar Productions Required
+
+- `void` keyword as a return type in function signatures
+- `ret` with no operand for void-returning functions
+- `ptr` as the opaque pointer type (already in v1 scope)
+- empty parameter list `()` to denote no parameters
+
+##### 3.1 In-Memory Nodes Required
+
+- `void` type kind in the type enum
+- function type node that permits `void` as return type
+- `ret` instruction node with optional operand (absent for void return)
+
+##### 3.1 Semantic Validation Rules
+
+- a `ret` with no operand is only valid in a function whose return type is `void`
+- a `ret` with an operand is only valid in a function whose return type is not `void`
+- `void` may not appear as the type of an object symbol (no `symbol @x : void`)
+- `void` may not appear as an element type in a struct, union, or array
+- `ptr` is the correct type for `void *`; no separate `void *` type node is needed
+
+##### 3.1 Lowering Notes (Target Independent)
+
+Functions with void return type emit no return value. The `ret` instruction for void functions lowers to a bare return with no register operand. `void *` parameters and return values are lowered uniformly as `ptr`, consistent with the opaque-pointer model already adopted in v1.
+
+##### 3.1 Test Coverage Status
+
+Planned
+
+- positive: void-return function with no parameters declared and defined
+- positive: void-return function body ending with bare `ret`
+- positive: `ptr` parameter representing a `void *` argument
+- negative: `ret` with operand in a void-returning function
+- negative: `ret` with no operand in a non-void-returning function
+- negative: object symbol declared with type `void`
+
 #### 3.2 Character Types
 
+##### 3.2 Feature
+
+C99 defines three character types: `char`, `signed char`, and `unsigned char`. Whether plain `char` is signed or unsigned is implementation-defined. `wchar_t`, `char16_t`, and `char32_t` are typedef aliases for implementation-defined integer types. All character types are lowered to integer types in TIIR; no distinct character type keyword exists in the IR.
+
+| C99 type       | TIIR type | Notes                                      |
+|----------------|-----------|--------------------------------------------|
+| `char`         | `i8`      | signedness resolved by target/ABI          |
+| `signed char`  | `i8`      | explicitly signed 8-bit integer            |
+| `unsigned char`| `u8`      | explicitly unsigned 8-bit integer          |
+| `wchar_t`      | `i32`     | typical; target-dependent width            |
+| `char16_t`     | `u16`     | UTF-16 code unit                           |
+| `char32_t`     | `u32`     | UTF-32 code point                          |
+
+String literals are lowered to `[N i8]` or `[N u8]` array symbols as appropriate.
+
+##### 3.2 Representative C Snippet
+
+```c
+void f(void) {
+  char c = 'A';
+  unsigned char uc = 0xFF;
+  signed char sc = -1;
+  const char *s = "hi";
+}
+```
+
+##### 3.2 TIIR Canonical Form
+
+```tiir
+symbol @str_hi : [3 i8] = "hi\00" [!linkage: internal];
+
+symbol @f : () -> void [!linkage: external]:
+  alloca i8 %c
+  store i8 %c, 65
+  alloca u8 %uc
+  store u8 %uc, 255
+  alloca i8 %sc
+  store i8 %sc, -1
+  alloca ptr %s
+  store ptr %s, @str_hi
+  ret
+```
+
+##### 3.2 Grammar Productions Required
+
+- `i8` and `u8` as integer type keywords (covered by 3.3 integer types)
+- string literal constant lowered to a named array symbol (covered by existing string-constant support)
+- no new type keywords required; character types map entirely onto existing integer type tokens
+
+##### 3.2 In-Memory Nodes Required
+
+- no new type nodes; `i8`/`u8` are integer type instances
+- the mapping from C character types to TIIR integer types is a charon frontend concern, not an IR node concern
+
+##### 3.2 Semantic Validation Rules
+
+- `i8` and `u8` obey the same arithmetic and overflow rules as all integer types in TIIR
+- signedness is explicit at the IR level; charon is responsible for resolving the implementation-defined signedness of plain `char` before emission
+
+##### 3.2 Lowering Notes (Target Independent)
+
+All character type lowering is performed by charon before TIIR emission. The IR sees only `i8`, `u8`, `i16`, `u16`, `i32`, `u32` etc. String literals are emitted as named array symbols with a null terminator appended. No character-type-specific instruction semantics exist in TIIR.
+
+##### 3.2 Test Coverage Status
+
+Planned
+
+- positive: `i8` and `u8` object allocations and stores with character-range literals
+- positive: string literal emitted as `[N i8]` array symbol with null terminator
+- positive: `ptr` symbol pointing to a string literal array
+
 #### 3.3 Integer Types
+
+##### 3.3 Feature
+
+C99 integer types have implementation-defined widths constrained by the standard's minimum-range requirements. TIIR uses explicit-width integer types so that the IR is width-unambiguous regardless of target. Charon resolves all C integer type names to their concrete widths for the target ABI before emission.
+
+| C99 type                        | TIIR type   | Width            | Signedness |
+|---------------------------------|-------------|------------------|------------|
+| `signed char`                   | `i8`        | 8-bit            | signed     |
+| `unsigned char`                 | `u8`        | 8-bit            | unsigned   |
+| `short` / `signed short`        | `i16`       | 16-bit           | signed     |
+| `unsigned short`                | `u16`       | 16-bit           | unsigned   |
+| `int` / `signed int`            | `i32`       | 32-bit           | signed     |
+| `unsigned int`                  | `u32`       | 32-bit           | unsigned   |
+| `long` / `signed long`          | `i32`/`i64` | target-dependent | signed     |
+| `unsigned long`                 | `u32`/`u64` | target-dependent | unsigned   |
+| `long long` / `signed long long`| `i64`       | 64-bit           | signed     |
+| `unsigned long long`            | `u64`       | 64-bit           | unsigned   |
+| `intptr_t` / `ptrdiff_t`        | `i64`       | 64-bit (x86-64)  | signed     |
+| `uintptr_t` / `size_t`          | `u64`       | 64-bit (x86-64)  | unsigned   |
+
+TIIR integer type keywords follow the pattern `i<width>` for signed and `u<width>` for unsigned, where width is a positive power-of-two number of bits.
+
+##### 3.3 Representative C Snippet
+
+```c
+void f(void) {
+  int a = 1;
+  unsigned int b = 2u;
+  long long c = -1LL;
+  unsigned long long d = 0xFFFFFFFFFFFFFFFFULL;
+  short e = 32767;
+}
+```
+
+##### 3.3 TIIR Canonical Form
+
+```tiir
+symbol @f : () -> void [!linkage: external]:
+  alloca i32 %a
+  store i32 %a, 1
+  alloca u32 %b
+  store u32 %b, 2
+  alloca i64 %c
+  store i64 %c, -1
+  alloca u64 %d
+  store u64 %d, 18446744073709551615
+  alloca i16 %e
+  store i16 %e, 32767
+  ret
+```
+
+##### 3.3 Grammar Productions Required
+
+- integer type keywords: `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `u64` (and any further power-of-two widths as needed)
+- signed and unsigned integer literal tokens (decimal, hex `0x`, octet `0o`, binary `0b`)
+- integer literal as an operand in `store`, `add`, `sub`, etc.
+
+##### 3.3 In-Memory Nodes Required
+
+- integer type node with width (bits) and signedness fields
+- integer literal operand node with value and type
+
+##### 3.3 Semantic Validation Rules
+
+- integer type width must be a positive power of two
+- integer literal value must be representable in the declared type width and signedness; out-of-range literals are a parse/validation error
+- signed overflow in constant expressions is a validation error; unsigned wrap-around is well-defined
+- mixed-width operands to arithmetic instructions are not permitted; charon must emit explicit cast/extend/truncate instructions before use
+
+##### 3.3 Lowering Notes (Target Independent)
+
+All C integer type names are resolved to explicit TIIR width types by charon, using the target ABI's type-width table. No implicit promotion or widening occurs at the TIIR level; all integer promotions required by C99 (e.g., `short` promoted to `int` in arithmetic) must be made explicit by charon via cast instructions before emission.
+
+##### 3.3 Test Coverage Status
+
+Planned
+
+- positive: allocation and store for each integer type width and signedness
+- positive: hex and binary integer literals
+- positive: maximum and minimum representable values for each type
+- negative: integer literal out of range for declared type
+- negative: mixed-width operands to an arithmetic instruction without explicit cast
 
 #### 3.4 Boolean Type
 
