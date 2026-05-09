@@ -3204,33 +3204,1290 @@ Planned
 
 #### 5.1 Scalar Initialization
 
+##### 5.1 Feature
+
+C99 scalar initializers assign compile-time constant values to object
+declarations at module scope (file-scope static/extern objects) and block scope
+(local automatic/static objects). TIIR represents scalar initializers as
+constant literal expressions attached to symbol declarations.
+
+Scalar initializer forms in TIIR v1:
+
+- integer literal: `42`, `0x1f`, `0b1010`
+- floating literal: `3.14f`, `2.0`, `1e-5`
+- enumerator reference: `@ENUM_VALUE`
+- boolean literal: `0`, `1` (treated as `i1` values)
+- null pointer: `null` (opaque `ptr` type)
+- character literal (lowered to integer): `65` (for `'A'`)
+
+Initializers are type-checked against declared object type and must be
+representable in the target type without overflow (for integer types) or loss of
+precision (for floating types, subject to ABI policy).
+
+##### 5.1 Representative C Snippet
+
+```c
+int count = 42;
+float ratio = 3.14f;
+int *ptr = NULL;
+enum Color shade = RED;
+const int flags = 0x1f;
+```
+
+##### 5.1 TIIR Canonical Form
+
+```tiir
+symbol @count : i32 = 42;
+symbol @ratio : f32 = 3.14;
+symbol @ptr : ptr = null;
+symbol @shade : i32 = @RED;
+symbol @flags : i32 = 0x1f [!qualifiers: const];
+```
+
+##### 5.1 Grammar Productions Required
+
+- symbol declaration with scalar initializer:
+  - `symbol_decl = "symbol" global_symbol ":" type "=" initializer [tag_use] ";"`
+- scalar initializer forms:
+  - integer literal: `integer_constant`
+  - floating literal: `float_constant`
+  - enumerator/global symbol reference: `@id`
+  - null pointer: `null`
+- initializer must parse and validate against declared type
+
+##### 5.1 In-Memory Nodes Required
+
+- symbol declaration node with optional initializer payload:
+  - initializer kind (literal_kind)
+  - literal value (int/float/enum-ref/null)
+  - source location for diagnostics
+- initializer type-compatibility validator
+- compile-time constant expression evaluator
+
+##### 5.1 Semantic Validation Rules
+
+- initializer type must be compatible with declared object type
+- integer initializers must be representable in declared integer type width and
+  signedness; overflow is invalid for signed types, wrapping is defined for
+  unsigned types
+- floating initializers must be representable in declared float type; precision
+  loss or underflow is a lowering decision per target policy
+- enumerator references (`@id`) are valid only when `@id` resolves to a global
+  enumerator constant; the enumerator's integer value is used for type checking
+- null pointer initializer (`null`) is valid only for pointer-typed objects
+- character literals in C source are lowered to integer values by charon before
+  TIIR emission and must fit in the target integer type
+- boolean/logical initializers in C (`true`, `false`) are lowered to `1` or `0`
+  (`i1` literals) before TIIR emission
+- zero is implicitly assigned to uninitialized file-scope and tentative objects
+  at end of translation unit by verifier if not explicitly initialized
+
+##### 5.1 Lowering Notes (Target Independent)
+
+Charon evaluates C compile-time constant expressions, type-converts initializers
+to the declared type, and emits TIIR scalar initializers with explicit literal
+values. Implicit zero initialization of tentative definitions is verified
+post-parsing when an object is not explicitly initialized.
+
+##### 5.1 Test Coverage Status
+
+Planned
+
+- positive: integer object initialization with representable literal
+- positive: floating-point object initialization
+- positive: pointer object initialization with `null`
+- positive: enumerator constant used as scalar initializer
+- positive: qualified object with compatible scalar initializer
+- positive: implicit zero initialization of uninitialized file-scope object
+- negative: integer initializer out of range for declared type
+- negative: float initializer on integer-typed object
+- negative: integer initializer on float-typed object
+- negative: null pointer on non-pointer-typed object
+- negative: enumerator reference to undefined enumerator name
+- negative: initializer on incomplete object type
+
 #### 5.2 Aggregate Initialization
+
+##### 5.2 Feature
+
+C99 aggregate initializers assign compile-time values to array and struct/union
+objects. TIIR represents aggregate initializers as ordered lists of element
+initializers (recursively scalars or nested aggregates) matched structurally to
+the declared aggregate type.
+
+Aggregate initializer forms in TIIR v1:
+
+- array literal: `[elem0, elem1, ...]` for fixed-size arrays `[N T]`
+- string literal: `"hello"` (shorthand for character array with null terminator)
+- struct literal: `{ field0: value0, field1: value1, ... }` with optional
+  member-tag or positional field selection
+- union literal: `{ field: value }` (only one member initialized)
+- nested aggregates: arrays/structs within struct/array initializers
+
+Partial initialization fills remaining elements/members with zero.
+Fixed-size arrays require initializer element count ≤ array bound. Runtime-sized
+arrays `[* T]` do not accept fixed initializers in TIIR v1.
+
+##### 5.2 Representative C Snippet
+
+```c
+int arr[4] = {1, 2};
+struct Point { int x; int y; } p = {10, 20};
+struct Mixed { int id; float val; } m = {1, 3.14f};
+const char msg[] = "hello";
+```
+
+##### 5.2 TIIR Canonical Form
+
+```tiir
+symbol @arr : [4 i32] = [1, 2, 0, 0];
+
+type @Point = struct { %x: i32, %y: i32 };
+symbol @p : @Point = { %x = 10, %y = 20 };
+
+type @Mixed = struct { %id: i32, %val: f32 };
+symbol @m : @Mixed = { %id = 1, %val = 3.14 };
+
+symbol @msg : [6 i8] = "hello";
+```
+
+##### 5.2 Grammar Productions Required
+
+- array literal form:
+  - `array_init = "[" [init_elem {"," init_elem}] [","] "]"`
+- string literal form:
+  - `string_literal = '"' char_sequence '"'`
+  - equivalent to array of `i8` with implicit null terminator
+- struct literal form:
+  - `struct_init = "{" [struct_field {"," struct_field}] [","] "}"`
+  - `struct_field = ["%tag" "="] init_elem`
+- union literal form:
+  - `union_init = "{" struct_field "}"`
+  - exactly one member initialized
+- init_elem is recursively scalar or aggregate initializer
+
+##### 5.2 In-Memory Nodes Required
+
+- aggregate initializer node with ordered element list
+- array initializer payload: `(elements: [initializer])`
+- struct initializer payload:
+  - field-tagged map: `(field_tag_or_index -> initializer)`
+  - element ordering preserved from source
+- string literal payload:
+  - character sequence with implicit null terminator
+  - represented as array of `i8` constants
+- initializer element can be scalar or nested aggregate
+- partial-initialization tracker (remainder zero-filled by verifier)
+
+##### 5.2 Semantic Validation Rules
+
+- array initializer element count must not exceed declared array bound for
+  fixed-size arrays
+- each array element initializer must be type-compatible with array element
+  type
+- runtime-sized array form `[* T]` is invalid as an initializer target in v1
+- struct initializer field mappings must use valid member tags (if tagged) or
+  valid positional indices
+- each struct member initializer must be type-compatible with declared member
+  type
+- uninitialized struct members are zero-filled (implicit)
+- union initializer must specify exactly one member
+- uninitialized union members are unspecified (post-verifier concern)
+- string literal is valid only for character array types (`[N i8]`, `[N u8]`)
+- string literal length (including null terminator) must not exceed declared
+  array bound
+- nested aggregates must recursively satisfy all aggregate validation rules
+- struct field selection by tag requires the struct type to be complete and
+  the tag to resolve in the struct's member-tag namespace
+
+##### 5.2 Lowering Notes (Target Independent)
+
+Charon lowering ensures initializers are fully expanded to element/member level
+before TIIR emission. String literals are converted to character arrays with
+implicit null terminator. Partial initialization (fewer elements/members than
+aggregate size) is represented explicitly in TIIR by zero-filling omitted
+elements, making the full extent of memory initialization transparent.
+
+##### 5.2 Test Coverage Status
+
+Planned
+
+- positive: fixed array initialization with fewer elements than bound
+- positive: fixed array initialization with all elements specified
+- positive: struct initialization with all members tagged
+- positive: struct initialization with positional member selection
+- positive: nested aggregate initialization (array of structs)
+- positive: string literal initialization for character array
+- positive: string literal with implicit null terminator validation
+- positive: union initialization with single member
+- negative: array initializer element count exceeds bound
+- negative: array element type incompatible with initializer
+- negative: struct field tag unresolved or invalid
+- negative: struct member type incompatible with initializer
+- negative: union initializer with multiple members
+- negative: string literal on non-character-array type
+- negative: string literal length exceeds array bound
+- negative: initializer on runtime-sized array `[* T]`
+- negative: nested aggregate initializer with invalid element type
+- negative: initializer on incomplete struct type
 
 #### 5.3 Designated Initializers
 
+##### 5.3 Feature
+
+C99 designated initializers allow explicit field/element selection in aggregate
+initializers, overriding positional ordering. TIIR normalizes designated
+initializer syntax from C source into explicit element/member assignments,
+then validates that the resulting aggregate covers required fields and remains
+type-compatible.
+
+Designated forms in TIIR v1:
+
+- array designator: `[index] = value` (C99 syntax `arr[i] = ...`)
+- struct designator: `%tag = value` (C99 syntax `.field = ...`)
+- designator combinations: multiple designations within one initializer
+
+##### 5.3 Representative C Snippet
+
+```c
+int arr[5] = {[2] = 42, [0] = 10};
+struct Point { int x; int y; } p = {.y = 20, .x = 10};
+struct Config { int a; int b; int c; } cfg = {.b = 5};
+```
+
+##### 5.3 TIIR Canonical Form
+
+```tiir
+symbol @arr : [5 i32] = [10, 0, 42, 0, 0];
+
+type @Point = struct { %x: i32, %y: i32 };
+symbol @p : @Point = { %x = 10, %y = 20 };
+
+type @Config = struct { %a: i32, %b: i32, %c: i32 };
+symbol @cfg : @Config = { %a = 0, %b = 5, %c = 0 };
+```
+
+##### 5.3 Grammar Productions Required
+
+- array designator in initializer:
+  - `[integer_literal] "=" init_elem`
+- struct designator in initializer:
+  - `"%tag" "=" init_elem`
+- mixed positional and designated initializers within one aggregate (C99 allows
+  this; TIIR normalizes to full element list)
+- designator precedence: designated values override positional fill
+
+##### 5.3 In-Memory Nodes Required
+
+- aggregate initializer with designator metadata:
+  - per-element/member: `(index_or_tag, initializer, is_designated)`
+  - full canonical form after designation resolution
+- designated initializer resolver that:
+  - maps each designator to element/member index
+  - fills gaps with zero/uninitialized
+  - detects conflicts (same element designated twice)
+
+##### 5.3 Semantic Validation Rules
+
+- array designator index must be within range `[0, array_bound - 1]`
+- struct designator tag must resolve in the struct's member-tag namespace
+- designator and positional initializers may be mixed; positional elements
+  fill gaps until next designator
+- duplicate designations of the same element/member are invalid
+- designated initializers do not require all members to be specified; unspecified
+  members are zero-filled
+- after designator resolution, resulting initializer must satisfy all aggregate
+  type compatibility rules from 5.2
+
+##### 5.3 Lowering Notes (Target Independent)
+
+Charon frontend parses C designator syntax and produces a normalized canonical
+initializer form in TIIR, expanding all designations to explicit element/member
+positions and zero-filling gaps. This makes the full initialization extent
+transparent and eliminates parser ambiguity.
+
+##### 5.3 Test Coverage Status
+
+Planned
+
+- positive: array designator with index in range
+- positive: struct designator with valid member tag
+- positive: mixed positional and designated initializers
+- positive: designated initializer with gaps filled by zero
+- positive: multiple designated initializers in same aggregate
+- negative: array designator index out of range
+- negative: struct designator tag unresolved
+- negative: duplicate designation of same element
+- negative: designator with type-incompatible value
+
 #### 5.4 Nested Designators
+
+##### 5.4 Feature
+
+C99 nested designators allow hierarchical specification of initializers for
+deeply nested aggregates (arrays of structs, structs containing arrays, etc.).
+TIIR normalizes nested designators to a flat canonical form by recursively
+resolving each designator level and applying type-driven descent.
+
+Nested designator forms in C:
+
+- `arr[i].field` — array element followed by struct member
+- `s.arr[j]` — struct member that is an array, indexed
+- `s.inner.field` — nested struct member access
+- `arr[i][j]` — multi-dimensional array indexing
+
+TIIR flattens these to explicit intermediate values and final element values.
+
+##### 5.4 Representative C Snippet
+
+```c
+struct Inner { int val; };
+struct Outer { int id; struct Inner inner; } obj = {.inner.val = 42};
+int matrix[3][3] = {[1][2] = 7};
+```
+
+##### 5.4 TIIR Canonical Form
+
+```tiir
+type @Inner = struct { %val: i32 };
+type @Outer = struct { %id: i32, %inner: @Inner };
+symbol @obj : @Outer = {
+  %id = 0,
+  %inner = { %val = 42 }
+};
+
+symbol @matrix : [3 [3 i32]] = [
+  [0, 0, 0],
+  [0, 0, 7],
+  [0, 0, 0]
+];
+```
+
+##### 5.4 Grammar Productions Required
+
+- nested designator forms:
+  - `designator = designator_elem {designator_elem}`
+  - `designator_elem = "[" integer_literal "]" | "%tag"`
+- charon parser resolves declarator context and normalizes nested designators
+  into TIIR; no distinct nested-designator syntax is required in TIIR text form
+  beyond the flat canonical initializer
+
+##### 5.4 In-Memory Nodes Required
+
+- nested initializer tree structure:
+  - recursively defined aggregates with element/member initializers
+  - leaf initializers are scalars or complete aggregate forms
+- designator path resolution:
+  - type-driven descent through nested aggregate types
+  - conflict detection for overlapping or invalid paths
+
+##### 5.4 Semantic Validation Rules
+
+- each designator element must be valid for its aggregate level:
+  - array designator on array type with index in bounds
+  - struct designator on struct type with valid member tag
+- designator path must resolve through complete types at each level
+- nested designator cannot skip intermediate aggregates; full path must be
+  specified
+- resulting nested initializer must satisfy all type compatibility rules
+  recursively
+
+##### 5.4 Lowering Notes (Target Independent)
+
+Charon performs full designator path resolution before TIIR emission, producing
+a nested initializer tree that mirrors the target aggregate type structure.
+This eliminates ambiguity and makes type-checking straightforward.
+
+##### 5.4 Test Coverage Status
+
+Planned
+
+- positive: array-of-struct designator with nested member access
+- positive: struct-with-array member designator with array indexing
+- positive: multi-level struct nesting with designators
+- positive: multi-dimensional array designator
+- negative: designator path through incomplete type
+- negative: invalid designator element at intermediate level
+- negative: designator path mismatch with aggregate structure
 
 #### 5.5 Zero Initialization Defaults
 
+##### 5.5 Feature
+
+C99 zero initialization fills uninitialized object storage with all-zero bit
+patterns (for static/extern scope) or leaves the value indeterminate (for
+automatic scope in C semantics). TIIR makes this explicit: file-scope objects
+not otherwise initialized are zero-initialized by the verifier, and local
+automatic objects without initializers are marked uninitialized (for later
+analysis or explicit zero-init if required by policy).
+
+##### 5.5 Representative C Snippet
+
+```c
+int g_uninitialized;              /* file-scope: implicitly zero */
+static int s_uninitialized;       /* static: implicitly zero */
+int f(void) {
+  int local_uninit;               /* automatic: undefined in C */
+  static int local_static = 0;    /* static within function: zero */
+  return local_uninit;            /* undefined behavior */
+}
+```
+
+##### 5.5 TIIR Canonical Form
+
+```tiir
+symbol @g_uninitialized : i32;
+symbol @s_uninitialized : i32 [!linkage: internal];
+
+symbol @f : () -> i32 [!linkage: external]:
+%f_bb0:
+  alloca i32 %local_static [!storage: static]
+  ret %local_uninit
+```
+
+##### 5.5 Grammar Productions Required
+
+- no distinct zero-initialization syntax in TIIR; zero-fill is a semantic
+  property driven by storage class and declaration state
+- verifier pass after parsing applies implicit zero initialization according to
+  storage class rules
+
+##### 5.5 In-Memory Nodes Required
+
+- storage class annotation per symbol (`!storage: static`, `!storage: automatic`, etc.)
+- declaration-state flag: `is_initialized`
+- verifier metadata: zero-init policy per symbol (implicit for static scope, none
+  for automatic)
+
+##### 5.5 Semantic Validation Rules
+
+- file-scope objects without initializers are tentative definitions; if not
+  overridden by a complete definition with initializer, they are implicitly
+  zero-initialized at module load time
+- static-storage objects (including `static` within block scope) are implicitly
+  zero-initialized if not explicitly initialized
+- automatic-storage objects (local variables) without initializers have undefined
+  values in C99 semantics; TIIR analysis may flag these for diagnostic purposes
+- block-scope static objects are initialized once at program start; their
+  initializer must be a compile-time constant expression
+
+##### 5.5 Lowering Notes (Target Independent)
+
+Charon frontend preserves zero-initialization intent via storage class and
+initialization state. The TIIR verifier applies implicit zero-fill to static-
+scope objects post-parsing. Automatic objects are left uninitialized (marked
+with diagnostic metadata) to reflect C99 semantics.
+
+##### 5.5 Test Coverage Status
+
+Planned
+
+- positive: file-scope object without initializer implicitly zero-initialized
+- positive: static-storage object without initializer implicitly zero
+- positive: static object within function scope initialized once
+- positive: tentative definition without initializer later overridden by complete
+  definition with initializer
+- negative: use of uninitialized automatic variable (diagnostic only)
+
 #### 5.6 String Literal Initialization for Char Arrays
 
+##### 5.6 Feature
+
+C99 string literals initialize character arrays directly. TIIR represents
+string literals as `"..."` shorthand for arrays of `i8` or `u8` with implicit
+null terminator. When assigned to a char array declaration, the string length
+(including null terminator) must fit within the declared array bound.
+
+##### 5.6 Representative C Snippet
+
+```c
+const char msg[] = "hello";
+const char fixed[10] = "hi";
+char *ptr = "literal";
+```
+
+##### 5.6 TIIR Canonical Form
+
+```tiir
+symbol @msg : [6 i8] = "hello";
+symbol @fixed : [10 i8] = "hi";
+symbol @ptr : ptr = @.str_literal_1
+```
+
+##### 5.6 Grammar Productions Required
+
+- string literal form in initializer:
+  - `string_literal = '"' [escape_sequence | char]* '"'`
+- string literal in pointer assignment:
+  - lowered to global character array symbol reference
+- escape sequences (`\n`, `\t`, `\\`, `\"`, `\xHH`, `\OOO`, etc.) normalized by
+  charon before TIIR emission
+
+##### 5.6 In-Memory Nodes Required
+
+- string literal storage:
+  - character sequence (normalized escape sequences)
+  - implicit null terminator (length includes `\0`)
+  - array type `[N i8]` with `N = string_length + 1`
+- string literal deduplication:
+  - identical string literals may share single storage symbol (linker concern)
+- string-to-pointer decay:
+  - pointer assignments to string literals lower to symbol-ref operands
+
+##### 5.6 Semantic Validation Rules
+
+- string literal initializer for `[N T]` requires `T` to be `i8` or `u8`
+  (character types)
+- string literal length (including null terminator) must not exceed declared
+  array bound
+- string literal assigned to pointer is lowered to reference to character array
+  symbol
+- escape sequences must be valid (e.g., `\xHH` with valid hex digits)
+- string literal width (character encoding) must match declared array element
+  width
+
+##### 5.6 Lowering Notes (Target Independent)
+
+Charon lexer/frontend normalizes string literals and escape sequences, produces
+canonical `i8` character sequences, and emits appropriate array symbol or
+pointer reference. String deduplication is a backend/linker concern.
+
+##### 5.6 Test Coverage Status
+
+Planned
+
+- positive: string literal for exact-fit char array
+- positive: string literal shorter than array bound (partial init)
+- positive: string literal assigned to pointer (decay to symbol reference)
+- positive: escape sequences in string literal
+- negative: string literal length exceeds array bound
+- negative: string literal for non-character-array type
+- negative: invalid escape sequence
+
 #### 5.7 Compound Literals
+
+##### 5.7 Feature
+
+C99 compound literals create unnamed temporary aggregate values with explicit
+type and initializer: `(type) { ... }` in expression context. TIIR represents
+compound literals as anonymous static storage objects with initializers, then
+referenced by pointer in expression operands (consistent with C99 semantics of
+compound literal lvalues).
+
+##### 5.7 Representative C Snippet
+
+```c
+struct Point { int x; int y; };
+struct Point *p = &(struct Point) {10, 20};
+int *arr_ptr = (int[3]) {1, 2, 3};
+```
+
+##### 5.7 TIIR Canonical Form
+
+```tiir
+type @Point = struct { %x: i32, %y: i32 };
+
+symbol @.compound_1 : @Point = { %x = 10, %y = 20 } [!storage: static];
+symbol @p : ptr = @.compound_1;
+
+symbol @.compound_2 : [3 i32] = [1, 2, 3] [!storage: static];
+symbol @arr_ptr : ptr = @.compound_2;
+```
+
+##### 5.7 Grammar Productions Required
+
+- compound literal form:
+  - `"(" type ")" "{" aggregate_initializer "}"`
+- compound literals are frontend-only syntax; charon lowers them to anonymous
+  static storage declarations and emits symbol references
+
+##### 5.7 In-Memory Nodes Required
+
+- anonymous symbol generation for each compound literal:
+  - stable unique naming (e.g., `.compound_N`)
+  - static storage class
+  - initializer payload
+- operand reference to anonymous symbol (pointer-typed)
+
+##### 5.7 Semantic Validation Rules
+
+- compound literal type must be a complete aggregate type (array, struct, or
+  union)
+- initializer must be compatible with declared compound literal type
+- compound literal is an lvalue; address-of or pointer assignment is required
+  to preserve the value
+- block-scope compound literals have automatic storage lifetime within the
+  enclosing block (TIIR may track scope extent for diagnostic purposes)
+- file-scope compound literals have static storage lifetime
+
+##### 5.7 Lowering Notes (Target Independent)
+
+Charon frontend recognizes compound literal syntax, generates a unique storage
+symbol with static scope and initializer, then replaces the literal expression
+with a symbol reference (pointer-typed). Scope metadata is preserved for
+block-scope compound literals to enable lifetime tracking if needed.
+
+##### 5.7 Test Coverage Status
+
+Planned
+
+- positive: compound literal with aggregate initializer
+- positive: address-of compound literal assigned to pointer
+- positive: compound literal in block scope (diagnostic scope tracking)
+- positive: compound literal with designated initializer
+- negative: compound literal with incomplete type
+- negative: compound literal initializer type mismatch
+- negative: compound literal without aggregate initializer
 
 ### 6. Expressions and Conversions
 
 #### 6.1 Primary Expressions
 
+##### 6.1 Feature
+
+C99 primary expressions are the atomic values in TIIR: literals, identifiers, and
+parenthesized expressions. TIIR represents them as direct operands without
+wrapper instructions, allowing them to be used directly in instruction operands.
+
+Primary expression forms in TIIR v1:
+
+- integer literal: `42`, `0x1f`, `0b1010`
+- floating literal: `3.14`, `1e-5`
+- character literal (lowered to integer): `65` (for `'A'`)
+- enumerator constant: `@ENUM_NAME`
+- identifier (symbol reference): `@global_sym` or `%local_sym`
+- string literal: `@.str_1` (reference to global string symbol)
+- null pointer: `null`
+- parenthesized expression: evaluates to same type as inner expression
+
+##### 6.1 Representative C Snippet
+
+```c
+int main(void) {
+  int x = 42;
+  float y = 3.14;
+  int *p = NULL;
+  enum Color c = RED;
+  const char *msg = "hello";
+  return x;
+}
+```
+
+##### 6.1 TIIR Canonical Form
+
+```tiir
+symbol @main : () -> i32 [!linkage: external]:
+%main_bb0:
+  alloca i32 %x
+  store i32 %x, 42
+  alloca f32 %y
+  store f32 %y, 3.14
+  alloca ptr %p
+  store ptr %p, null
+  alloca i32 %c
+  store i32 %c, @RED
+  load i32 %result, %x
+  ret %result
+```
+
+##### 6.1 Grammar Productions Required
+
+- literal operand forms: `integer_const`, `float_const`, `null`
+- identifier/symbol operand forms: `@id`, `%id`
+- no special syntax required beyond existing operand productions
+
+##### 6.1 In-Memory Nodes Required
+
+- literal value nodes (int, float, null)
+- symbol reference operand nodes (global or local)
+- operand representation as immediate or symbol reference
+
+##### 6.1 Semantic Validation Rules
+
+- integer literals must be representable in operand-context integer type
+- floating literals must be representable in operand-context float type
+- symbol references must resolve to declared global symbols (`@`) or local
+  symbols (`%`) in scope
+- null pointer constant is valid only in pointer contexts
+
+##### 6.1 Lowering Notes (Target Independent)
+
+Charon emits primary expressions directly as operands; no instruction wrapping
+is required.
+
+##### 6.1 Test Coverage Status
+
+Planned
+
+- positive: integer literal in instruction operand
+- positive: identifier reference in instruction operand
+- positive: enumerator constant in operand
+- positive: null pointer constant in pointer operand context
+- negative: undefined symbol reference
+- negative: literal out of representable range
+
 #### 6.2 Postfix Operators
+
+##### 6.2 Feature
+
+C99 postfix operators include array subscripting `a[i]`, function calls `f(...)`,
+member selection `.member` and `->member`, and post-increment/post-decrement.
+TIIR lowers these to instruction sequences:
+
+- array subscripting → `gep` + `load`
+- member selection → `gep` + optional `load`
+- function calls → `call`
+- post-increment/post-decrement → `load`, `add`/`sub`, `store`
+
+##### 6.2 Representative C Snippet
+
+```c
+int arr[3] = {1, 2, 3};
+struct Point { int x; int y; } p = {10, 20};
+int result = arr[1] + p.x;
+int f(int);
+int x = f(5);
+```
+
+##### 6.2 TIIR Canonical Form
+
+```tiir
+symbol @arr : [3 i32] = [1, 2, 3];
+type @Point = struct { %x: i32, %y: i32 };
+symbol @p : @Point = { %x = 10, %y = 20 };
+symbol @f : (i32) -> i32;
+
+symbol @result : () -> i32:
+%result_bb0:
+  gep [3 i32] %ptr_arr, @arr, 1
+  load i32 %elem, %ptr_arr
+  gep @Point %ptr_x, @p, %x
+  load i32 %field_x, %ptr_x
+  add i32 %sum, %elem, %field_x
+  ret %sum
+```
+
+##### 6.2 Grammar Productions Required
+
+- `gep` instruction: `gep type dest, src_ptr, selector`
+- `load` instruction: `load type dest, ptr_operand`
+- `call` instruction: `call (param_types) -> return_type dest, func, (args)`
+- subscripting normalized to `gep` with integer index before TIIR emission
+- member selection normalized to `gep` with integer index or `%tag` before TIIR
+  emission
+
+##### 6.2 In-Memory Nodes Required
+
+- `gep` instruction node: base type, destination, source pointer, selector
+- `load` instruction node: result type, destination, source pointer
+- `call` instruction node: function type, destination, function reference, arguments
+
+##### 6.2 Semantic Validation Rules
+
+- array subscript must have compatible pointer or array type and integer index
+- array/struct member access requires complete base aggregate type
+- function call requires function pointer or function symbol
+- function call arguments must match declared function parameter count and types
+- result of array subscript is lvalue (addressable)
+- result of member selection is lvalue if base is lvalue
+
+##### 6.2 Lowering Notes (Target Independent)
+
+Charon resolves C99 postfix operator precedence and lvalue/rvalue distinction,
+then emits explicit `gep` + `load` sequences for array/member access and `call`
+instructions for function invocation.
+
+##### 6.2 Test Coverage Status
+
+Planned
+
+- positive: array subscript with integer index
+- positive: struct member selection with tag
+- positive: function call with matching argument types
+- positive: chained postfix operators (e.g., array of struct)
+- negative: array subscript on non-pointer/non-array type
+- negative: function call with argument count mismatch
+- negative: member selection on incomplete struct type
 
 #### 6.3 Unary Operators
 
+##### 6.3 Feature
+
+C99 unary operators include address-of `&`, dereference `*`, negation `-`,
+bitwise complement `~`, logical negation `!`, pre/post-increment/decrement,
+sizeof, and _Alignof. TIIR lowers these to instruction sequences:
+
+- address-of (`&`) → returns pointer to lvalue (no instruction; operand form)
+- dereference (`*`) → `load` from pointer operand
+- negation (`-`) → typed `neg` for integer and floating-point operands
+- bitwise complement (`~`) → `xor -1, x`
+- logical negation (`!`) → `eq i1 result, x, 0`
+- sizeof → compile-time constant (no instruction)
+- pre/post-increment → `load`, `add`/`sub`, `store`
+
+##### 6.3 Representative C Snippet
+
+```c
+int x = 5;
+int *p = &x;
+int y = *p;
+int neg = -x;
+int comp = ~x;
+int logical = !x;
+int sz = sizeof(int);
+```
+
+##### 6.3 TIIR Canonical Form
+
+```tiir
+symbol @x : i32 = 5;
+symbol @p : ptr;
+
+symbol @test : () -> void:
+%test_bb0:
+  alloca i32 %local_x
+  store i32 %local_x, 5
+  store ptr %p, %local_x      /* address-of: directly reference address */
+  load i32 %deref, %p
+  load i32 %x_val, %local_x
+  neg i32 %neg, %x_val
+  xor i32 %comp, %x_val, -1
+  eq i1 %logical, %x_val, 0
+  ret
+```
+
+##### 6.3 Grammar Productions Required
+
+- address-of operator: operand is lvalue, result is pointer (no instruction)
+- dereference: `load type dest, ptr_operand`
+- negation: `neg type dest, operand` (valid for integer and floating types)
+- bitwise complement: `xor type dest, operand, -1`
+- logical negation: `eq i1 dest, operand, 0`
+- increment/decrement: `load`, `add`/`sub`, `store` sequence
+- sizeof: compile-time constant value in operand
+
+##### 6.3 In-Memory Nodes Required
+
+- unary operator instruction nodes (neg, xor, eq, load for each form)
+- lvalue-rvalue tracking for address-of and dereference
+- compile-time constant evaluation for sizeof
+
+##### 6.3 Semantic Validation Rules
+
+- address-of requires an lvalue; result is pointer
+- dereference requires pointer operand
+- negation requires integer or floating operand
+- bitwise complement requires integer operand
+- logical negation converts operand to i1 condition
+- sizeof operand must be a complete type
+- increment/decrement requires integer or pointer operand and lvalue
+
+##### 6.3 Lowering Notes (Target Independent)
+
+Charon resolves unary operators to explicit instruction sequences. Address-of
+and dereference are the primary pointer/lvalue mechanisms. Pre/post-increment
+distinction is normalized to pre-increment semantics (explicit load-modify-store).
+
+##### 6.3 Test Coverage Status
+
+Planned
+
+- positive: address-of lvalue producing pointer operand
+- positive: dereference pointer operand via load
+- positive: negation of integer
+- positive: negation of float
+- positive: bitwise complement of integer
+- positive: logical negation producing i1 result
+- positive: sizeof with complete type
+- negative: address-of non-lvalue
+- negative: dereference non-pointer type
+- negative: negation of non-numeric type
+- negative: sizeof incomplete type
+
 #### 6.4 Cast Expressions
+
+##### 6.4 Feature
+
+C99 explicit casts convert values between types: `(type) expr`. TIIR lowering
+produces type-conversion instructions for incompatible type pairs:
+
+- integer → integer (different width/signedness): `trunc`, `zext`, `sext`
+- integer → float: `sitofp` (signed), `uitofp` (unsigned)
+- float → integer: `fptosi` (signed), `fptoui` (unsigned)
+- float → float (different width): explicit conversion deferred
+- pointer → integer: `ptrtoi` (size-compatible only)
+- integer → pointer: `itop` (size-compatible only)
+- pointer → pointer: implicit (no instruction in opaque model)
+
+##### 6.4 Representative C Snippet
+
+```c
+int x = 42;
+short s = (short) x;
+float f = (float) x;
+int i = (int) f;
+int *p = (int *) 0x1000;
+```
+
+##### 6.4 TIIR Canonical Form
+
+```tiir
+symbol @test : () -> void:
+%test_bb0:
+  alloca i32 %x
+  store i32 %x, 42
+  load i32 %x_val, %x
+  trunc i16 %s, %x_val       /* i32 -> i16 */
+  sitofp f32 %f, %x_val      /* i32 -> f32 */
+  fptosi i32 %i, %f
+  itop ptr %p, 0x1000        /* i64 -> ptr */
+  ret
+```
+
+##### 6.4 Grammar Productions Required
+
+- cast syntax: `"(" type ")" expr`
+- conversion instruction forms:
+  - `trunc type_out dest, operand` (truncate to smaller integer)
+  - `zext type_out dest, operand` (zero-extend to larger integer)
+  - `sext type_out dest, operand` (sign-extend to larger integer)
+  - `sitofp type_out dest, operand` (signed integer to float)
+  - `uitofp type_out dest, operand` (unsigned integer to float)
+  - `fptosi type_out dest, operand` (float to signed integer)
+  - `fptoui type_out dest, operand` (float to unsigned integer)
+  - `ptrtoi type_out dest, operand` (pointer to integer)
+  - `itop type_out dest, operand` (integer to pointer)
+
+##### 6.4 In-Memory Nodes Required
+
+- cast/conversion instruction nodes: source type, destination type, operand
+- type-compatibility checker for valid conversion paths
+
+##### 6.4 Semantic Validation Rules
+
+- source and target types must be compatible for conversion
+- integer-to-integer conversions require valid width/signedness change
+- integer-to-float and float-to-integer conversions are valid
+- pointer-to-integer and integer-to-pointer conversions are valid only when
+  source and target sizes are compatible
+- incompatible pointer/integer cast sizes emit a diagnostic whose severity is
+  warning or error according to requested diagnostic level/profile
+- implicit conversions are applied per usual arithmetic conversion rules
+- explicit casts bypass some implicit conversion restrictions
+
+##### 6.4 Lowering Notes (Target Independent)
+
+Charon determines the minimal conversion instruction sequence required. For
+pointer/integer casts, charon (or verifier) must validate size compatibility
+using target data model information and emit profile-configured diagnostics on
+mismatch.
+
+##### 6.4 Test Coverage Status
+
+Planned
+
+- positive: integer truncation cast
+- positive: integer zero-extension cast
+- positive: integer sign-extension cast
+- positive: signed-integer to float conversion
+- positive: float to signed-integer conversion
+- positive: pointer-to-integer cast with compatible size
+- positive: integer-to-pointer cast with compatible size
+- negative: invalid cast between incompatible types (e.g., struct)
+- negative: pointer-to-integer cast with incompatible size
+- negative: integer-to-pointer cast with incompatible size
+- negative: lossy cast without explicit conversion operator
 
 #### 6.5 Multiplicative, Additive, and Shift Expressions
 
+##### 6.5 Feature
+
+C99 multiplicative, additive, and shift operators work on integer, floating,
+and pointer operands (as context permits). TIIR lowers them to typed
+instruction forms:
+
+- multiplicative: `mul`, `div` (integer or float), `mod` (integer only)
+- additive: `add`, `sub` (integer or float; pointer arithmetic allowed where
+  valid)
+- shift: `shl` (left shift), `lshr` (logical right shift), `ashr` (arithmetic
+  right shift), valid only on integer types
+
+##### 6.5 Representative C Snippet
+
+```c
+int a = 10, b = 3;
+float fa = 10.0f, fb = 3.0f;
+int sum = a + b;
+int prod = a * b;
+int quot = a / b;
+int rem = a % b;
+float fsum = fa + fb;
+float fprod = fa * fb;
+int shifted = a << 2;
+```
+
+##### 6.5 TIIR Canonical Form
+
+```tiir
+symbol @test : () -> i32:
+%test_bb0:
+  alloca i32 %a
+  store i32 %a, 10
+  alloca i32 %b
+  store i32 %b, 3
+  alloca f32 %fa
+  store f32 %fa, 10.0
+  alloca f32 %fb
+  store f32 %fb, 3.0
+  load i32 %a_val, %a
+  load i32 %b_val, %b
+  load f32 %fa_val, %fa
+  load f32 %fb_val, %fb
+  add i32 %sum, %a_val, %b_val
+  mul i32 %prod, %a_val, %b_val
+  div i32 %quot, %a_val, %b_val
+  mod i32 %rem, %a_val, %b_val
+  add f32 %fsum, %fa_val, %fb_val
+  mul f32 %fprod, %fa_val, %fb_val
+  shl i32 %shifted, %a_val, 2
+  ret %sum
+```
+
+##### 6.5 Grammar Productions Required
+
+- arithmetic instructions:
+  - `add type dest, operand1, operand2`
+  - `sub type dest, operand1, operand2`
+  - `mul type dest, operand1, operand2`
+  - `div type dest, operand1, operand2`
+  - `mod type dest, operand1, operand2` (integer type only)
+- shift instructions:
+  - `shl type dest, operand, shift_amount`
+  - `lshr type dest, operand, shift_amount`
+  - `ashr type dest, operand, shift_amount`
+- operand types must be consistent for the operation
+
+##### 6.5 In-Memory Nodes Required
+
+- binary arithmetic instruction nodes (add, sub, mul, div, mod)
+- shift instruction nodes (shl, lshr, ashr)
+- operand type compatibility checker
+- division-by-zero detector (deferred)
+
+##### 6.5 Semantic Validation Rules
+
+- operands to `add`/`sub`/`mul`/`div` must be either integer-typed or
+  floating-typed and must match instruction type
+- pointer arithmetic is valid for `add` and `sub` with pointer and integer
+  operands
+- division and modulo by zero are invalid (verifier concern)
+- `mod` operands must be integer-typed
+- shift instructions are valid only on integer-typed operands; shift amount
+  must be non-negative and less than bit width
+- mixed-width operands require explicit conversion before operation
+- implicit usual arithmetic conversions are applied pre-instruction emission
+
+##### 6.5 Lowering Notes (Target Independent)
+
+Charon applies usual arithmetic conversions to operands, then emits explicit
+arithmetic instructions. Pointer arithmetic is handled per C99 semantics
+(pointer scaled by element type).
+
+##### 6.5 Test Coverage Status
+
+Planned
+
+- positive: integer addition
+- positive: float addition
+- positive: integer multiplication
+- positive: float multiplication
+- positive: integer division and modulo
+- positive: shift operations with valid shift amounts
+- positive: pointer addition with integer offset
+- negative: shift on floating-point operand
+- negative: shift amount out of range
+- negative: division by zero
+- negative: mixed-width operands without explicit conversion
+- negative: pointer arithmetic on non-pointer operand
+
 #### 6.6 Relational and Equality Expressions
 
+##### 6.6 Feature
+
+C99 relational (`<`, `<=`, `>`, `>=`) and equality (`==`, `!=`) operators
+produce i1 (boolean) results. TIIR lowers them to comparison instructions:
+
+- `eq` (equal)
+- `ne` (not equal)
+- `lt` (less than, signed)
+- `le` (less than or equal, signed)
+- `gt` (greater than, signed)
+- `ge` (greater than or equal, signed)
+- `ult` (unsigned less than)
+- `ule` (unsigned less than or equal)
+- `ugt` (unsigned greater than)
+- `uge` (unsigned greater than or equal)
+
+##### 6.6 Representative C Snippet
+
+```c
+int x = 10, y = 5;
+int eq_result = (x == y);
+int lt_result = (x < y);
+int cond = (x > y) ? 1 : 0;
+```
+
+##### 6.6 TIIR Canonical Form
+
+```tiir
+symbol @test : () -> i32:
+%test_bb0:
+  alloca i32 %x
+  store i32 %x, 10
+  alloca i32 %y
+  store i32 %y, 5
+  load i32 %x_val, %x
+  load i32 %y_val, %y
+  eq i1 %eq_res, %x_val, %y_val
+  lt i1 %lt_res, %x_val, %y_val
+  gt i1 %gt_res, %x_val, %y_val
+  ret %eq_res
+```
+
+##### 6.6 Grammar Productions Required
+
+- comparison instructions:
+  - `eq i1 dest, operand1, operand2`
+  - `ne i1 dest, operand1, operand2`
+  - `lt i1 dest, operand1, operand2` (signed)
+  - `le i1 dest, operand1, operand2` (signed)
+  - `gt i1 dest, operand1, operand2` (signed)
+  - `ge i1 dest, operand1, operand2` (signed)
+  - `ult i1 dest, operand1, operand2` (unsigned)
+  - `ule i1 dest, operand1, operand2` (unsigned)
+  - `ugt i1 dest, operand1, operand2` (unsigned)
+  - `uge i1 dest, operand1, operand2` (unsigned)
+
+##### 6.6 In-Memory Nodes Required
+
+- comparison instruction nodes (eq, ne, lt, le, gt, ge, ult, ule, ugt, uge)
+- result type always `i1`
+- operand type compatibility checker
+
+##### 6.6 Semantic Validation Rules
+
+- operands to relational operators must be arithmetic types (integers, floats)
+- or compatible pointer types
+- result of comparison is always `i1`
+- signed vs unsigned comparison is signedness-sensitive
+- mixed-signedness comparisons require explicit conversion
+
+##### 6.6 Lowering Notes (Target Independent)
+
+Charon resolves operand signedness and chooses appropriate signed/unsigned
+comparison instruction. Mixed-signedness operands are explicitly converted
+before comparison.
+
+##### 6.6 Test Coverage Status
+
+Planned
+
+- positive: equality comparison of integers
+- positive: relational comparison of integers
+- positive: pointer equality comparison
+- positive: comparison result feeding into branch condition
+- negative: comparison of non-arithmetic types
+- negative: mixed-signedness comparison without conversion
+
 #### 6.7 Bitwise and Logical Expressions
+
+##### 6.7 Feature
+
+C99 bitwise operators (`&`, `|`, `^`) work on integers; logical operators
+(`&&`, `||`) short-circuit and produce i1 results. TIIR lowers bitwise
+operators to instruction forms and represents logical operators as conditional
+control flow:
+
+- bitwise `and`, `or`, `xor` (integers only)
+- bitwise `~` (complement) → `xor -1, x`
+- logical `&&` → control flow short-circuit (result i1)
+- logical `||` → control flow short-circuit (result i1)
+
+##### 6.7 Representative C Snippet
+
+```c
+int a = 12, b = 10;
+int bitwise_and = a & b;
+int bitwise_or = a | b;
+int bitwise_xor = a ^ b;
+int logical_and = (a && b);
+int logical_or = (a || b);
+```
+
+##### 6.7 TIIR Canonical Form
+
+```tiir
+symbol @test : () -> i32:
+%test_bb0:
+  alloca i32 %a
+  store i32 %a, 12
+  alloca i32 %b
+  store i32 %b, 10
+  load i32 %a_val, %a
+  load i32 %b_val, %b
+  and i32 %and_res, %a_val, %b_val
+  or i32 %or_res, %a_val, %b_val
+  xor i32 %xor_res, %a_val, %b_val
+  ne i1 %a_cond, %a_val, 0       /* convert to i1 */
+  ne i1 %b_cond, %b_val, 0
+  and i1 %and_logical, %a_cond, %b_cond
+  or i1 %or_logical, %a_cond, %b_cond
+  ret %and_res
+```
+
+##### 6.7 Grammar Productions Required
+
+- bitwise instructions:
+  - `and type dest, operand1, operand2`
+  - `or type dest, operand1, operand2`
+  - `xor type dest, operand1, operand2`
+- logical instructions (on i1):
+  - `and i1 dest, cond1, cond2`
+  - `or i1 dest, cond1, cond2`
+- short-circuit semantics: logical `&&`/`||` use control flow (br instructions)
+
+##### 6.7 In-Memory Nodes Required
+
+- bitwise instruction nodes (and, or, xor)
+- logical instruction nodes (and/or on i1)
+- short-circuit control flow blocks for logical operators
+- condition evaluation and branching
+
+##### 6.7 Semantic Validation Rules
+
+- bitwise operators require integer operands
+- logical operators require operands convertible to i1 (via comparison or
+  boolean context)
+- short-circuit evaluation is mandatory for `&&` and `||`
+- bitwise operators on `i1` are valid
+- arithmetic operations on `i1` are invalid (except bitwise)
+
+##### 6.7 Lowering Notes (Target Independent)
+
+Charon lowering converts non-i1 operands to boolean conditions via comparison
+before logical operations, and emits control-flow branches for short-circuit
+semantics when logical operators are used in statement context.
+
+##### 6.7 Test Coverage Status
+
+Planned
+
+- positive: bitwise and/or/xor of integers
+- positive: logical and/or with short-circuit behavior
+- positive: bitwise operations on `i1`
+- negative: bitwise operation on non-integer type
+- negative: arithmetic on `i1`
+- negative: logical operator without short-circuit
 
 #### 6.8 Conditional Operator
 
