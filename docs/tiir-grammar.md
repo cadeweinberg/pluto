@@ -4491,31 +4491,594 @@ Planned
 
 #### 6.8 Conditional Operator
 
+##### 6.8 Feature
+
+C99 conditional expressions (`cond ? expr_true : expr_false`) select one of two
+expressions based on a condition converted to boolean context. TIIR lowers the
+conditional operator using the same control-flow strategy as logical
+short-circuiting in 6.7: evaluate condition, branch to true/false blocks,
+evaluate only the selected arm, then merge to a single result value.
+
+Key properties:
+
+- condition is converted to `i1` before branching
+- exactly one arm is evaluated at runtime
+- true and false arm result types must be compatible after usual conversions
+- merged result has one effective type and can be used as an expression operand
+
+##### 6.8 Representative C Snippet
+
+```c
+int x = 10;
+int y = 5;
+int max = (x > y) ? x : y;
+float r = (x != 0) ? 1.5f : 2.5f;
+```
+
+##### 6.8 TIIR Canonical Form
+
+```tiir
+symbol @test : () -> i32:
+%test_bb0:
+  alloca i32 %x
+  store i32 %x, 10
+  alloca i32 %y
+  store i32 %y, 5
+  load i32 %x_val, %x
+  load i32 %y_val, %y
+  gt i1 %cond, %x_val, %y_val
+  alloca i32 %max_tmp
+  br %cond, %test_bb_true, %test_bb_false
+
+%test_bb_true:
+  store i32 %max_tmp, %x_val
+  b %test_bb_merge
+
+%test_bb_false:
+  store i32 %max_tmp, %y_val
+  b %test_bb_merge
+
+%test_bb_merge:
+  load i32 %max, %max_tmp
+  ret %max
+```
+
+##### 6.8 Grammar Productions Required
+
+- conditional expression surface form (frontend syntax):
+  - `conditional_expr = logical_or_expr "?" expr ":" conditional_expr`
+- TIIR lowering requires existing control-flow instruction forms:
+  - `br cond, true_label, false_label`
+  - `b label`
+- merge-value lowering requires existing memory/value instructions:
+  - `alloca type %tmp`
+  - `store type %tmp, value`
+  - `load type %dst, %tmp`
+
+##### 6.8 In-Memory Nodes Required
+
+- conditional-expression AST node (frontend) with:
+  - condition expression
+  - true-arm expression
+  - false-arm expression
+- lowered control-flow blocks for true/false/merge regions
+- merged expression value representation (temporary storage or equivalent
+  SSA-merge construct)
+- type-resolution record for final conditional expression type
+
+##### 6.8 Semantic Validation Rules
+
+- condition expression must be convertible to `i1` boolean context
+- true and false arm expressions must be type-compatible after usual
+  arithmetic/pointer conversion rules
+- only selected branch arm is evaluated at runtime
+- merged result type is the composite/effective type derived from both arms
+- if one arm is `void`, the other arm must also satisfy C99 conditional
+  operator constraints for void conditional expressions
+- pointer-typed conditional arms must satisfy pointer compatibility rules from
+  6.13
+
+##### 6.8 Lowering Notes (Target Independent)
+
+Charon should lower `?:` using explicit control-flow blocks consistent with 6.7
+short-circuit logic. Frontend type resolution determines a single effective
+result type before emission. v1 may use temporary storage (`alloca`/`store`/
+`load`) for merge value materialization; future profiles may replace this with a
+dedicated SSA merge form.
+
+##### 6.8 Test Coverage Status
+
+Planned
+
+- positive: integer conditional expression with relational condition
+- positive: float conditional expression with arithmetic-compatible arms
+- positive: pointer conditional expression with compatible pointer arms
+- positive: conditional expression used as call argument
+- negative: condition not convertible to boolean context
+- negative: incompatible true/false arm types
+- negative: invalid pointer arm compatibility
+- negative: both arms evaluated (short-circuit violation)
+
 #### 6.9 Assignment and Compound Assignment
+
+##### 6.9 Feature
+
+C99 assignment expressions write values to modifiable lvalues and produce an
+expression result. TIIR models assignment through explicit memory operations and
+typed arithmetic/bitwise instructions.
+
+Assignment forms covered in v1:
+
+- simple assignment: `=`
+- arithmetic compound assignment: `+=`, `-=`, `*=`, `/=`, `%=`
+- shift compound assignment: `<<=`, `>>=`
+- bitwise compound assignment: `&=`, `|=`, `^=`
+
+Lowering model:
+
+- `lhs = rhs` -> compute `rhs`, convert if required, `store`, result is stored
+  value
+- `lhs op= rhs` -> `load lhs`, compute `lhs op rhs`, `store`, result is new
+  stored value
+
+##### 6.9 Representative C Snippet
+
+```c
+int x = 10;
+int y = 3;
+x = y;
+x += 2;
+x *= y;
+x &= 7;
+```
+
+##### 6.9 TIIR Canonical Form
+
+```tiir
+symbol @test : () -> i32:
+%test_bb0:
+  alloca i32 %x
+  store i32 %x, 10
+  alloca i32 %y
+  store i32 %y, 3
+
+  /* x = y */
+  load i32 %y_val, %y
+  store i32 %x, %y_val
+
+  /* x += 2 */
+  load i32 %x0, %x
+  add i32 %x1, %x0, 2
+  store i32 %x, %x1
+
+  /* x *= y */
+  load i32 %x2, %x
+  load i32 %y2, %y
+  mul i32 %x3, %x2, %y2
+  store i32 %x, %x3
+
+  /* x &= 7 */
+  load i32 %x4, %x
+  and i32 %x5, %x4, 7
+  store i32 %x, %x5
+
+  ret %x5
+```
+
+##### 6.9 Grammar Productions Required
+
+- assignment-expression frontend forms:
+  - `assignment_expr = unary_expr assignment_op assignment_expr`
+  - `assignment_op = "=" | "*=" | "/=" | "%=" | "+=" | "-=" | "<<=" | ">>=" | "&=" | "^=" | "|="`
+- TIIR uses existing instruction forms for lowering:
+  - `load type dest, ptr_operand`
+  - `store type ptr_operand, value`
+  - arithmetic/bitwise instructions from 6.5 and 6.7
+
+##### 6.9 In-Memory Nodes Required
+
+- assignment-expression AST node:
+  - lhs expression (must resolve to modifiable lvalue)
+  - assignment operator kind
+  - rhs expression
+- lowered instruction sequence nodes:
+  - load/compute/store pipeline for compound assignment
+- expression-result tracking for assignment expression value
+
+##### 6.9 Semantic Validation Rules
+
+- left-hand side must be a modifiable lvalue
+- assignment to `const`-qualified objects is invalid
+- assignment to array objects is invalid
+- simple assignment requires rhs value to be convertible to lhs object type
+- compound assignment requires:
+  - lhs type and rhs type compatible with underlying operator
+  - integer-only restrictions for `%`, shifts, and bitwise compound operators
+  - shift compound assignments valid only for integer lhs/rhs
+- pointer assignment requires pointer compatibility per 6.13
+- assignment expression result type is the lhs type after required conversions
+
+##### 6.9 Lowering Notes (Target Independent)
+
+Charon lowers assignment to explicit side-effecting store operations. Compound
+assignment preserves C99 evaluation semantics by loading lhs exactly once,
+applying conversions/operator semantics, then storing once. The expression
+result is the final stored value, represented either as the computed temporary
+or a post-store load according to lowering strategy.
+
+##### 6.9 Test Coverage Status
+
+Planned
+
+- positive: simple scalar assignment
+- positive: arithmetic compound assignment (`+=`, `*=`) on integers
+- positive: arithmetic compound assignment on floating types where allowed
+- positive: bitwise compound assignment on integer type
+- positive: shift compound assignment with valid integer operands
+- positive: assignment expression used as subexpression value
+- negative: assignment to non-modifiable lvalue (`const`)
+- negative: assignment to array object
+- negative: modulo/bitwise compound assignment on floating operand
+- negative: shift compound assignment on non-integer type
+- negative: incompatible rhs type without valid conversion
 
 #### 6.10 Comma Operator
 
+##### 6.10 Feature
+
+C99 comma expressions evaluate the left operand, discard its value, then
+evaluate and yield the right operand value. In TIIR v1 this is frontend-lowered
+by charon into ordered evaluation using existing instruction sequencing within
+the current basic block/control-flow graph.
+
+No dedicated TIIR comma instruction is introduced.
+
+##### 6.10 Lowering Notes (Target Independent)
+
+Charon emits both operand evaluations in source order, preserves side effects
+from the left expression, and forwards only the right expression value as the
+result. This uses existing TIIR entities only (instruction order, branches,
+temporaries, load/store/call/etc.).
+
+##### 6.10 Grammar / In-Memory Impact
+
+- frontend-only syntax handling in charon
+- no new TIIR grammar productions required beyond existing expression lowering
+  targets
+- no new TIIR instruction node kinds required
+
+##### 6.10 Validation Notes
+
+- evaluation order must remain left-to-right for comma operands
+- side effects in left operand must be preserved even when value is discarded
+
 #### 6.11 Lvalue/Rvalue and Modifiable Lvalue Rules
+
+##### 6.11 Feature
+
+C99 lvalue/rvalue category checks and modifiable-lvalue constraints are enforced
+by charon during semantic analysis and lowering. TIIR receives already-resolved
+address/value usage mapped onto existing pointer and memory operations.
+
+No distinct TIIR value-category metadata is required in v1 beyond existing type
+and operand semantics.
+
+##### 6.11 Lowering Notes (Target Independent)
+
+Charon resolves whether each expression is used as an addressable object or
+value, then lowers to existing TIIR forms:
+
+- lvalue use -> address-producing forms (`alloca`, `gep`, symbol address)
+- rvalue use -> value-producing forms (`load`, arithmetic/compare/cast results)
+- assignment destination checks -> existing store legality validation
+
+##### 6.11 Grammar / In-Memory Impact
+
+- frontend-only value-category analysis
+- no new TIIR instruction syntax required
+- no new TIIR node families required; existing expression AST and instruction
+  nodes are sufficient
+
+##### 6.11 Validation Notes
+
+- assignment/update operators require modifiable lvalues
+- non-modifiable lvalue violations (for example `const` target, array target)
+  must be diagnosed before TIIR emission
 
 #### 6.12 Integer Promotions and Usual Arithmetic Conversions
 
+##### 6.12 Feature
+
+C99 integer promotions and usual arithmetic conversions are normalized by charon
+before emitting TIIR arithmetic/comparison instructions. TIIR instructions
+remain explicitly typed and do not perform implicit promotion at runtime.
+
+No new TIIR conversion categories are introduced; existing conversion
+instructions from 6.4 are reused.
+
+##### 6.12 Lowering Notes (Target Independent)
+
+Charon determines the common result type for each arithmetic/comparison
+expression, inserts explicit conversions as needed (`trunc`, `zext`, `sext`,
+`sitofp`, `uitofp`, `fptosi`, `fptoui`), then emits typed operations (`add`,
+`mul`, comparisons, etc.) on converted operands.
+
+##### 6.12 Grammar / In-Memory Impact
+
+- frontend-only promotion/conversion policy
+- no new TIIR grammar productions beyond existing cast/conversion instructions
+- no new TIIR instruction kinds required
+
+##### 6.12 Validation Notes
+
+- operands reaching typed arithmetic/comparison instructions must already be
+  conversion-compatible
+- mixed-width/signedness cases must be normalized by inserted explicit
+  conversions prior to emission
+
 #### 6.13 Pointer Conversions and Null Pointer Constants
+
+##### 6.13 Feature
+
+C99 pointer compatibility, pointer conversions, and null pointer constant rules
+are resolved by charon and lowered to existing TIIR pointer/value constructs.
+
+TIIR v1 uses opaque `ptr` plus existing conversion instructions; no additional
+pointer-type surface syntax is introduced.
+
+##### 6.13 Lowering Notes (Target Independent)
+
+Charon handles pointer conversion legality and null-constant normalization:
+
+- null pointer constants lower to `null` in pointer contexts
+- pointer-to-pointer compatibility checks are validated in frontend semantics
+- pointer<->integer casts use existing `ptrtoi` / `itop` instructions from 6.4
+  with size-compatibility diagnostics driven by target data model
+
+##### 6.13 Grammar / In-Memory Impact
+
+- frontend-only pointer compatibility resolution
+- no new TIIR grammar productions beyond existing `ptr`, `null`, `ptrtoi`,
+  and `itop` forms
+- no new TIIR node kinds required
+
+##### 6.13 Validation Notes
+
+- null pointer constants are valid only in pointer conversion/assignment
+  contexts
+- invalid pointer compatibility or disallowed pointer/integer cast sizes must
+  emit diagnostics according to configured severity profile
 
 ### 7. Statements and Control Flow
 
 #### 7.1 Labeled Statements
 
+##### 7.1 Feature
+
+C99 labeled statements (`label: stmt`, `case`, `default`) are frontend control-
+flow anchors. For ordinary labels, charon lowers directly into existing TIIR
+basic-block labels.
+
+No new TIIR entity is required for ordinary labels beyond existing function-
+local block labels.
+
+##### 7.1 Lowering Notes (Target Independent)
+
+Charon maps each user label to a unique function-local TIIR block label and
+rewrites references (`goto`) as branch targets to that block.
+
+##### 7.1 Grammar / In-Memory Impact
+
+- frontend-only labeled-statement syntax handling
+- no new TIIR instruction kinds required
+- existing function block table and branch-target resolution are reused
+
+##### 7.1 Validation Notes
+
+- label names must be unique within a function
+- label references must resolve within the same function
+
 #### 7.2 Compound Statements
+
+##### 7.2 Feature
+
+C99 compound statements (`{ ... }`) define block scope and statement sequencing.
+charon lowers these by emitting scoped declaration/statement order into existing
+TIIR blocks and instruction sequences.
+
+No dedicated TIIR compound-statement instruction is introduced.
+
+##### 7.2 Lowering Notes (Target Independent)
+
+Block entry/exit semantics are preserved through declaration lifetime handling
+(for example local `alloca`/`dealloca` policies) and ordered instruction
+emission. Nested blocks map to dominance/scoping in existing function CFG.
+
+##### 7.2 Grammar / In-Memory Impact
+
+- frontend-only `{ ... }` syntax handling
+- no new TIIR instruction forms
+- existing scope stacks, symbol tables, and CFG blocks are reused
+
+##### 7.2 Validation Notes
+
+- block-scope name visibility and shadowing rules must be enforced before
+  emission
+- scope-exit cleanup/lifetime edges must remain well-formed
 
 #### 7.3 Expression and Null Statements
 
+##### 7.3 Feature
+
+C99 expression statements (`expr;`) and null statements (`;`) are lowered by
+charon into existing TIIR expression-evaluation instructions, or no emission
+when a null statement has no side effects.
+
+##### 7.3 Lowering Notes (Target Independent)
+
+- expression statement: emit expression side effects; discard resulting value if
+  unused
+- null statement: emit no instruction unless required as CFG placeholder during
+  structured control-flow lowering
+
+##### 7.3 Grammar / In-Memory Impact
+
+- frontend-only statement-surface handling
+- no new TIIR instruction forms required
+
+##### 7.3 Validation Notes
+
+- expression side effects must be preserved even when value result is unused
+
 #### 7.4 Selection Statements: if/else, switch
+
+##### 7.4 Feature
+
+Selection statements are lowered into explicit control flow using existing TIIR
+branch instructions.
+
+- `if` / `if-else` -> condition evaluation + conditional branch + merge block
+- `switch` -> controlling expression evaluation + explicit `switch` dispatch +
+  case/default blocks + merge/exit
+
+TIIR adds an explicit `switch` dispatch instruction to make case lowering more
+direct and analyzable.
+
+##### 7.4 Lowering Notes (Target Independent)
+
+For `if`/`else`, charon emits condition-to-`i1` conversion, then `br` to true/
+false blocks with explicit merge. For `switch`, charon emits one `switch`
+instruction over the controlling operand with an operand-pack of case target
+entries plus one default target.
+
+##### 7.4 Grammar / In-Memory Impact
+
+- frontend-only `if`, `else`, `switch` syntax handling
+- TIIR reuses existing block labels and branch instructions, and adds explicit
+  `switch` dispatch form
+- no additional statement-level node families are required
+
+Proposed TIIR form:
+
+- `switch type cond, %default, (case_value_0, %label_0, case_value_1, %label_1, ...)`
+
+Canonical TIIR snippet:
+
+```tiir
+symbol @classify : (%x: i32) -> i32 [!linkage: external]:
+%classify_bb0:
+  switch i32 %x, %case_default, (0, %case_0, 1, %case_1)
+
+%case_0:
+  ret 100
+
+%case_1:
+  ret 200
+
+%case_default:
+  ret -1
+```
+
+##### 7.4 Validation Notes
+
+- selection conditions must be convertible to boolean context
+- switch controlling expression must be integer-compatible
+- duplicate case values in same switch are invalid
+- at most one default label per switch is allowed
+- each case target label must resolve in the current function
 
 #### 7.5 Iteration Statements: while, do-while, for
 
+##### 7.5 Feature
+
+Iteration statements are lowered by charon into explicit loop CFG regions using
+existing labels and branches.
+
+- `while` -> header test block, body block, exit block
+- `do-while` -> body block, post-test block, exit block
+- `for` -> init sequence, test block, body block, step block, exit block
+
+No dedicated TIIR loop instruction is introduced.
+
+##### 7.5 Lowering Notes (Target Independent)
+
+charon emits normalized loop skeletons with explicit back-edges using `b`/`br`.
+Loop-local scope/lifetime semantics are represented using existing declaration
+and memory-lifetime mechanisms.
+
+##### 7.5 Grammar / In-Memory Impact
+
+- frontend-only loop-surface syntax handling
+- TIIR reuses existing CFG blocks and branch instructions
+- no new instruction families required
+
+##### 7.5 Validation Notes
+
+- loop condition must be boolean-convertible
+- loop step/init ordering must preserve C99 execution semantics
+- `continue` targets loop-specific continuation block; `break` targets loop exit
+
 #### 7.6 Jump Statements: goto, continue, break, return
 
+##### 7.6 Feature
+
+Jump statements are lowered to existing TIIR branch/return instructions.
+
+- `goto label` -> unconditional branch `b %label`
+- `continue` -> branch to loop continuation point
+- `break` -> branch to nearest switch/loop exit block
+- `return` -> existing `ret` form (with/without operand)
+
+No new TIIR jump instruction kinds are introduced.
+
+##### 7.6 Lowering Notes (Target Independent)
+
+charon resolves jump targets during CFG construction and emits explicit branch
+edges. Return expression typing follows existing function return-type rules from
+section 4.5 and section 6 typing constraints.
+
+##### 7.6 Grammar / In-Memory Impact
+
+- frontend-only jump-surface syntax handling
+- TIIR reuses `b`, `br`, and `ret`
+- no new core TIIR entities required
+
+##### 7.6 Validation Notes
+
+- `goto` target must resolve in current function
+- `break` and `continue` are valid only within required statement contexts
+- `return` operand presence/type must match enclosing function signature
+
 #### 7.7 Switch case/default Semantics and Fallthrough
+
+##### 7.7 Feature
+
+Switch case/default and fallthrough semantics are frontend-resolved by charon
+and lowered into existing labeled blocks and branches.
+
+Fallthrough is represented by absence of terminating branch/return at the end of
+a case block, allowing control to flow to the next case block in emitted order.
+
+##### 7.7 Lowering Notes (Target Independent)
+
+charon emits case blocks in deterministic order and one explicit `switch`
+dispatch instruction, then models intentional fallthrough by preserving block
+sequencing without forced branch insertion when no terminating jump exists.
+
+##### 7.7 Grammar / In-Memory Impact
+
+- frontend-only case/default parsing and grouping
+- TIIR reuses existing labels/branches and the explicit `switch` dispatch form
+- no additional switch-specific node families are required beyond instruction
+  payload for case table entries
+
+##### 7.7 Validation Notes
+
+- case labels in one switch must be unique constant expressions
+- default label appears at most once per switch
+- unreachable/duplicate case diagnostics follow configured diagnostic policy
+- fallthrough behavior must preserve C99 semantics unless diagnostics profile
+  enforces explicit annotation policy
 
 ### 8. Functions and Calls
 
