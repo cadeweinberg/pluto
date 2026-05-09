@@ -5532,11 +5532,119 @@ profile/configuration.
 
 #### 11.1 Hosted vs Freestanding Assumptions
 
+##### 11.1 Feature
+
+Runtime boundary behavior depends on compilation mode profile:
+
+- hosted: assumes availability of C runtime services and standard library entry
+  conventions
+- freestanding: assumes minimal runtime guarantees and implementation-defined
+  entry/runtime support
+
+TIIR remains neutral and expresses runtime interaction through existing function
+symbols, calls, metadata, and target profile settings.
+
+##### 11.1 Lowering Notes (Target Independent)
+
+charon and Pluto select hosted/freestanding policy from module/profile
+configuration and lower runtime expectations accordingly without introducing new
+core TIIR instruction entities.
+
+##### 11.1 Grammar / In-Memory Impact
+
+- no new core TIIR grammar required
+- optional module/profile metadata may encode hosted/freestanding mode
+- existing extern symbol and call forms are reused
+
+##### 11.1 Validation Notes
+
+- hosted mode should diagnose missing required runtime assumptions for selected
+  target profile
+- freestanding mode must not require unavailable hosted-only runtime contracts
+
 #### 11.2 Startup and Entry-Point Model
+
+##### 11.2 Feature
+
+Program startup and entry-point wiring are runtime/ABI concerns represented in
+TIIR as ordinary symbol declarations/definitions and call edges.
+
+Typical boundary:
+
+- language-level entry function (for example main-like function)
+- runtime-defined startup symbol that prepares environment and calls entry
+
+##### 11.2 Lowering Notes (Target Independent)
+
+charon emits language entry functions as normal TIIR symbols. Pluto/runtime
+integration determines final startup symbol mapping and entry sequencing per
+ABI/object format/profile.
+
+##### 11.2 Grammar / In-Memory Impact
+
+- no special startup opcode or grammar form required
+- existing symbol and call graph forms are reused
+- optional metadata may annotate designated entry symbol
+
+##### 11.2 Validation Notes
+
+- designated entry symbol must match required signature constraints for active
+  runtime profile
+- missing or incompatible entry symbol must be diagnosed before final link path
 
 #### 11.3 Builtin/Runtime Hooks Needed by Lowering
 
+##### 11.3 Feature
+
+Certain lowering paths require runtime hooks or compiler builtins (for example
+memory intrinsics, variadic helpers, trap hooks, or ABI helper routines).
+These are represented as ordinary extern symbols and call sites in TIIR.
+
+##### 11.3 Lowering Notes (Target Independent)
+
+charon/Pluto may introduce hook calls during lowering when source semantics or
+ABI policy requires helper routines. Hook insertion reuses existing call and
+extern declaration forms.
+
+##### 11.3 Grammar / In-Memory Impact
+
+- no new core grammar required
+- runtime hooks are modeled as normal function symbols
+- optional metadata may classify hook kind for tooling/debug output
+
+##### 11.3 Validation Notes
+
+- required hook symbols must resolve by link/runtime boundary for active target
+- hook signatures must match emitted call signatures exactly
+- unavailable mandatory hooks must produce diagnostics
+
 #### 11.4 C Library Declarations as Extern Symbols in TIIR
+
+##### 11.4 Feature
+
+C library functions used by translated units are represented as ordinary extern
+symbol declarations in TIIR. This keeps library boundary interaction uniform
+with user-defined external functions.
+
+##### 11.4 Lowering Notes (Target Independent)
+
+charon emits extern declarations for referenced library APIs with normalized TIIR
+function signatures. Pluto/link stage resolves these symbols against the target
+runtime/library environment.
+
+##### 11.4 Grammar / In-Memory Impact
+
+- no new library-specific TIIR syntax required
+- existing extern symbol declarations and call instructions are reused
+- optional module metadata may record expected runtime/library profile
+
+##### 11.4 Validation Notes
+
+- declared extern signatures should be compatible with target runtime ABI
+- unresolved required externs at final integration/link boundary must be
+  diagnosed
+- profile-specific library availability differences should be surfaced via
+  diagnostics
 
 ## TIIR Specification
 
