@@ -21,6 +21,8 @@
 
 - v1 scope: core executable IR (not declarations-only).
 - Pointer syntax: opaque ptr keyword.
+- Tuple syntax: implicit tuple types and literals use `( ... )`; tuple elements are positional.
+- Aggregate indexing: `gep` accepts integer indices for all aggregates; for structural types with tagged members, `gep` may accept a member tag `%id` and resolve it in the struct-local namespace.
 - Metadata attachment: prefix tag-use blocks.
 - Metadata key syntax: all metadata tags use `!id` prefix (e.g., `!version`, `!storage`, `!linkage`).
 - Symbol identity: both named and numeric symbols; global symbols use `@` prefix, local (block-scoped) symbols use `%` prefix.
@@ -33,6 +35,8 @@
   such as load, which expects a pointer type to load from, etc.)
 - instructions destination is always the leftmost operand, and it always introduces a new name to the local scope. (except for particular
   instructions such as 'ret' which only consume operands. e.g. `ret %3` etc.)
+- instruction operands with variable arity are passed as a tuple literal operand.
+- `call` passes arguments as a tuple literal, and `ret` may return an unnamed aggregate using a tuple literal.
 
 ## v1 Scope (Locked)
 
@@ -57,8 +61,9 @@ This section is normative for TIIR v1. The lexer, parser, and in-memory model sh
 - Core executable IR grammar
   - labels/basic blocks
   - instruction syntax needed for first-pass C99 lowering examples (call, return, branch, load/store, basic arithmetic/compare/cast forms)
+  - tuple operands for call arguments, variadic operand packs, and unnamed aggregate returns
 - Type/literal coverage required for first-wave C99 examples
-  - scalar integers/floats/bool, strings, arrays, struct/union literals
+  - scalar integers/floats/bool, strings, arrays, struct/union literals, tuple types/literals
   - opaque pointer type keyword (`ptr`)
 - Lexical features
   - comments
@@ -686,10 +691,15 @@ the IR operates below the C type-name surface:
 - `%name` — local ordinary identifiers (parameters, virtual registers,
   basic-block labels within a function body).
 
+TIIR additionally supports an explicit struct-member-tag namespace for
+structural member labels. Member tags use `%id` syntax but are local to the
+defining struct type and are only valid in structural contexts (type
+descriptors and `gep` member selection).
+
 Struct/union member names appear only inside type descriptors and are
-unambiguous by position/tag; they do not share the `@`/`%` identifier
-pools. Tag names are represented as named type definitions and also do not
-share either identifier pool.
+unambiguous by position/tag; they do not share ordinary identifier scope.
+Tag names are represented as named type definitions and also do not share
+ordinary identifier scope.
 
 ##### 1.6 Representative C Snippet
 
@@ -714,19 +724,19 @@ done:
 
 ```tiir
 /* tag namespace: struct Point becomes a named type descriptor */
-type @Point = struct { i32, i32 };
+type @Point = struct { %x: i32, %y: i32 };
 
 symbol @x : i32 = 1 [!linkage: external];
 
 symbol @f : (%x : i32) -> i32 [!linkage: external]:
 %f_bb0:
   alloca @Point %p
-  gep @Point %0, %p, 0       /* pointer to member 0 (.x) */
+  gep @Point %0, %p, %x      /* pointer to tagged member %x */
   store i32 %0, %x
   b %done
 
 %done:
-  gep @Point %2, %p, 0       /* pointer to member 0 (.x) */
+  gep @Point %2, %p, %x      /* pointer to tagged member %x */
   load i32 %3, %2
   add i32 %4, %3, %x
   ret %4
@@ -734,16 +744,18 @@ symbol @f : (%x : i32) -> i32 [!linkage: external]:
 
 ##### 1.6 Grammar Productions Required
 
-- named type definition form: `type @id = struct { type_list };` (or `union { ... }` for the respective C type kinds)
-- `gep` instruction form: `gep type dest, srcPtr, index` — computes a pointer to the Nth member of a struct/union or element of an array; result is `ptr`
+- named type definition form: `type @id = struct { struct_elem_list };` (or `union { ... }` / `enum { ... }` for the respective C type kinds)
+- struct element form: `["%" id ":"] type` (member tag optional)
+- `gep` instruction form: `gep type dest, srcPtr, member_selector` where `member_selector` is either an integer index or `%id`; `%id` form is valid iff `type` is structural and the selected member has a tag
 - basic-block label production (already required for 1.5)
 - ordinary global/local symbol productions (already required for 1.1–1.5)
 
 ##### 1.6 In-Memory Nodes Required
 
 - named type table (maps type name `@id` to struct/union type descriptor)
-- struct/union type descriptor: ordered member list with types and optional names
-- `gep` instruction node: base-type reference, destination symbol, source pointer operand, and integer index operand
+- struct/union type descriptor: ordered member list with types and optional member tags
+- per-struct member-tag table mapping `%id` -> member index
+- `gep` instruction node: base-type reference, destination symbol, source pointer operand, and selector operand (integer index or member tag)
 - no separate label-namespace node is needed: basic-block label entries in the
   function body serve this role
 
@@ -754,8 +766,12 @@ symbol @f : (%x : i32) -> i32 [!linkage: external]:
 - tag names (`type @id`) must be unique in the named-type table; redefinition
   with the same layout is a no-op (tentative); incompatible redefinition is an
   error
-- member names within a single struct/union type must be unique; member names
+- member tags within a single struct/union type must be unique; member tags
   across different struct/union types may coincide without conflict
+- `gep ... , %id` is valid only when the base type is structural and `%id`
+  resolves in that structural type's member-tag namespace
+- `gep ... , %id` resolution is performed in the struct scope (not function/
+  block scope), even though tag spelling uses `%` prefix
 - basic-block labels within one function must be unique; the same label name
   may appear in different functions without conflict
 - a `%label` used as a branch target must be declared as a label within the
@@ -770,8 +786,8 @@ emission. By the time TIIR is produced:
   definitions.
 - All ordinary names have been uniquified per scope and assigned `@` or `%`
   prefix identifiers; shadowed names are renamed to fresh temporaries.
-- Member references are lowered to numeric offsets; member names are not
-  retained in the instruction stream.
+- Member tags may be retained in structural type descriptors and used directly
+  by `gep` selector resolution; numeric selector form remains valid.
 - Label names are lowered to basic-block labels; `goto` is lowered to an
   unconditional branch instruction.
 
@@ -1003,7 +1019,7 @@ symbol @f : () -> void [!linkage: external]:
 
 ##### 3.3 Semantic Validation Rules
 
-- integer type width must be a positive power of two
+- integer type width must be one of 1, 8, 16, 32, 64.
 - integer literal value must be representable in the declared type width and signedness; out-of-range literals are a parse/validation error
 - signed overflow in constant expressions is a validation error; unsigned wrap-around is well-defined
 - mixed-width operands to arithmetic instructions are not permitted; charon must emit explicit cast/extend/truncate instructions before use
@@ -1024,15 +1040,628 @@ Planned
 
 #### 3.4 Boolean Type
 
+##### 3.4 Feature
+
+C99 introduces `_Bool` as an integer type constrained to values `0` and `1`.
+Including `<stdbool.h>` provides the macro alias `bool` and constants `true`
+and `false`, but TIIR models only the semantic type/value pair, not macro
+surface syntax.
+
+TIIR represents Boolean values as `i1`.
+
+- `false` lowers to integer literal `0` of type `i1`.
+- `true` lowers to integer literal `1` of type `i1`.
+- Any scalar-to-bool conversion lowers to an explicit compare against zero,
+  producing `i1`.
+
+##### 3.4 Representative C Snippet
+
+```c
+#include <stdbool.h>
+
+bool is_nonzero(int x) {
+  bool b = x;
+  return b;
+}
+
+bool both(bool a, bool c) {
+  return a && c;
+}
+```
+
+##### 3.4 TIIR Canonical Form
+
+```tiir
+symbol @is_nonzero : (%x: i32) -> i1 [!linkage: external]:
+  ne i32 %0, %x, 0
+  ret %0
+
+symbol @both : (%a: i1, %b: i1) -> i1 [!linkage: external]:
+  and i1 %0, %a, %c
+  ret %0
+```
+
+##### 3.4 Grammar Productions Required
+
+- `i1` integer type keyword (Boolean semantic type)
+- comparison instructions producing `i1` (for example `eq`, `ne`, `lt`, `le`,
+  `gt`, `ge`)
+- logical/bitwise-on-boolean instructions over `i1` (`and`, `or`, `xor`,
+  `not`)
+
+##### 3.4 In-Memory Nodes Required
+
+- integer type node instance for width 1 (`i1`)
+- comparison instruction nodes with result type fixed to `i1`
+- Boolean constants represented as typed integer literals (`0`/`1` on `i1`)
+
+##### 3.4 Semantic Validation Rules
+
+- only `0` and `1` are valid immediate literal values for `i1`
+- arithmetic instructions (`add`, `sub`, `mul`, `div`, etc.) are invalid on `i1`
+- `and`/`or`/`xor` over `i1` are valid and preserve `i1`
+- branch conditions must be `i1`; non-`i1` conditions require an explicit
+  compare before branching
+- scalar-to-bool conversion must be explicit in TIIR (typically `ne T %dst, %v, 0`)
+
+##### 3.4 Lowering Notes (Target Independent)
+
+Charon resolves `_Bool`/`bool` to TIIR `i1` before emission. C's truthiness
+rules (non-zero is true) are lowered explicitly via compare-to-zero operations.
+Logical `&&` and `||` short-circuit behavior is preserved by control flow
+structure in charon lowering; final Boolean results in TIIR remain `i1`.
+
+##### 3.4 Test Coverage Status
+
+Planned
+
+- positive: `_Bool`/`bool` variable initialization from integer expression via compare
+- positive: function returning `i1`
+- positive: branch using `i1` condition
+- negative: arithmetic instruction applied directly to `i1`
+- negative: branch on non-`i1` value without explicit compare
+- negative: `i1` literal other than `0` or `1`
+
 #### 3.5 Enumerated Types
+
+##### 3.5 Feature
+
+C99 enumerations define a set of named integer constants. Enumerator values are
+compile-time integer constants with implicit increment semantics unless explicit
+initializers are provided.
+
+TIIR treats enum values as integers after frontend lowering. Charon resolves
+enumerator names and values before emission. The underlying storage type is a
+concrete integer type selected by the target ABI policy (commonly `i32` for C99
+toolchains unless constrained otherwise).
+
+Enumerator identifiers are also introduced into TIIR's global ordinary-identifier
+namespace, matching C behavior. In instruction operands, enumerators are referenced
+as global symbols using `@` (for example: `@RED`, `@GREEN`).
+
+For readability and debug fidelity, TIIR may optionally preserve an enum type
+definition using concise `@`-prefixed enumerators in the locked form
+`enum { @ELEM = value, ... }`, while instructions and data operations still use
+the resolved integer type.
+
+##### 3.5 Representative C Snippet
+
+```c
+enum Color {
+  RED,
+  GREEN = 4,
+  BLUE
+};
+
+enum Color pick(int v) {
+  if (v == 0) return RED;
+  if (v == 1) return GREEN;
+  return BLUE;
+}
+```
+
+##### 3.5 TIIR Canonical Form
+
+```tiir
+type @Color = enum { @RED = 0, @GREEN = 4, @BLUE = 5 };
+
+symbol @pick : (%v: i32) -> i32 [!linkage: external]:
+%pick_bb0:
+  eq i32 %0, %v, @RED
+  br %0, %pick_bb_red, %pick_bb1
+
+%pick_bb1:
+  eq i32 %1, %v, @GREEN
+  br %1, %pick_bb_green, %pick_bb_blue
+
+%pick_bb_red:
+  ret @RED
+
+%pick_bb_green:
+  ret @GREEN
+
+%pick_bb_blue:
+  ret @BLUE
+```
+
+##### 3.5 Grammar Productions Required
+
+- enum type definition form: `type @id = enum { enum_elem_list };`
+- enum element form: `@id ["=" integer_literal]`
+- trailing comma support in enum element list (optional but recommended)
+- global enum symbol reference in operands: `@id`
+- no distinct enum runtime operand type is required; enum operands are integer-typed
+
+##### 3.5 In-Memory Nodes Required
+
+- optional enum type descriptor node:
+  - type name
+  - ordered enumerator list `(name, value)`
+  - chosen underlying integer type
+- global symbol entries for enumerators (name, integer value)
+- mapping table from enumerator name to global symbol and resolved integer value
+
+##### 3.5 Semantic Validation Rules
+
+- each enumerator value must be an integer constant expression resolved at
+  compile time by charon
+- implicit enumerator values increment from the previous resolved value by `+1`
+- duplicate enumerator names in the same enum are invalid
+- resolved enumerator value must fit in the selected underlying integer type
+- enumerator identifiers are emitted as global symbols and must be referenced as `@id`
+- duplicate enumerator names across different enums in the same translation unit
+  are invalid because they share the global ordinary-identifier namespace
+- TIIR instruction typing uses the underlying integer type only (no distinct
+  enum runtime type semantics in v1)
+
+##### 3.5 Lowering Notes (Target Independent)
+
+Enum declarations are resolved completely in charon. IR emission keeps enumerator
+names as global symbols for readability and C namespace fidelity, while execution
+semantics remain integer-based. Backends may fold `@ENUM_NAME` constants to immediates,
+but source-level TIIR keeps symbolic references.
+
+##### 3.5 Test Coverage Status
+
+Planned
+
+- positive: enum with implicit and explicit enumerator values
+- positive: function returning `@ENUM_NAME` global symbols
+- positive: enum symbols used in compare and branch lowering
+- negative: enum identifier used without `@` in instruction operand
+- negative: duplicate enumerator name
+- negative: explicit enumerator value outside representable range of selected
+  underlying type
+- negative: non-constant enumerator initializer
 
 #### 3.6 Floating Types
 
+##### 3.6 Feature
+
+C99 floating semantic categories are lowered to explicit TIIR floating-width
+types.
+
+- `float` lowers to `f32`
+- `double` lowers to `f64`
+- `long double` lowers to target policy in charon (v1 default: `f64` unless a
+  target profile explicitly requires a wider representation)
+
+In TIIR v1, only `f32` and `f64` are required floating types.
+
+`f16` and `f128` are reserved as future extensions and are not required for v1
+parsing/validation/execution.
+
+##### 3.6 Representative C Snippet
+
+```c
+float addf(float a, float b) {
+  return a + b;
+}
+
+double hyp2(double x, double y) {
+  return x * x + y * y;
+}
+```
+
+##### 3.6 TIIR Canonical Form
+
+```tiir
+symbol @addf : (%a: f32, %b: f32) -> f32 [!linkage: external]:
+  add f32 %0, %a, %b
+  ret %0
+
+symbol @hyp2 : (%x: f64, %y: f64) -> f64 [!linkage: external]:
+  mul f64 %0, %x, %x
+  mul f64 %1, %y, %y
+  add f64 %2, %0, %1
+  ret %2
+```
+
+##### 3.6 Grammar Productions Required
+
+- floating type keywords: `f32`, `f64`
+- floating literal tokens (decimal with optional exponent; hexadecimal float
+  literal support optional for v1)
+- arithmetic instructions over floating operands (`add`, `sub`, `mul`, `div`)
+- floating compare instructions producing `i1` (`feq`, `fne`, `flt`, `fle`,
+  `fgt`, `fge`)
+
+##### 3.6 In-Memory Nodes Required
+
+- floating type node with width field (v1 allowed widths: 32, 64)
+- floating literal operand node with parsed value and type
+- floating compare instruction nodes producing `i1`
+
+##### 3.6 Semantic Validation Rules
+
+- in v1, only `f32` and `f64` are valid floating types
+- `f16` and `f128` tokens are rejected in v1 unless an extension/profile gate is enabled
+- arithmetic instruction operands must have identical floating type width
+- integer/float mixed operations require explicit conversion instructions before use
+- branch conditions remain `i1`; float conditions must be formed by explicit
+  `f*cmp` instruction first
+
+##### 3.6 Lowering Notes (Target Independent)
+
+Charon resolves C floating surface types to TIIR `f32`/`f64` according to target
+ABI policy. C implicit promotions (for example `float` to `double` in variadic
+contexts) are made explicit before TIIR emission via conversion instructions.
+TIIR execution semantics use explicit widths only; no implicit widening occurs
+inside IR instructions.
+
+##### 3.6 Test Coverage Status
+
+Planned
+
+- positive: `f32` arithmetic function
+- positive: `f64` arithmetic function
+- positive: explicit float comparison to produce `i1` for branch
+- negative: use of `f16` in v1 without extension gate
+- negative: use of `f128` in v1 without extension gate
+- negative: mixed `f32`/`f64` arithmetic without explicit conversion
+
 #### 3.7 Complex Types
+
+##### 3.7 Feature
+
+C99 complex types (`float _Complex`, `double _Complex`, `long double _Complex`)
+represent values with real and imaginary components.
+
+TIIR v1 does not introduce dedicated complex primitive types or complex
+instructions. Complex values are represented as aggregates of two floating
+scalars and complex operations are lowered in charon before TIIR emission.
+
+- `float _Complex` lowers to `struct { f32, f32 }`
+- `double _Complex` lowers to `struct { f64, f64 }`
+- `long double _Complex` lowers by target policy (v1 default follows `f64`-pair
+  representation unless a target profile specifies otherwise)
+
+##### 3.7 Representative C Snippet
+
+```c
+double _Complex addc(double _Complex a, double _Complex b) {
+  return a + b;
+}
+```
+
+##### 3.7 TIIR Canonical Form
+
+```tiir
+type @c64 = struct { f64, f64 };
+
+symbol @addc : (%a: @c64, %b: @c64) -> @c64 [!linkage: external]:
+%addc_bb0:
+  alloca @c64 %out
+
+  gep @c64 %a_re_ptr, %a, 0
+  gep @c64 %a_im_ptr, %a, 1
+  gep @c64 %b_re_ptr, %b, 0
+  gep @c64 %b_im_ptr, %b, 1
+  gep @c64 %o_re_ptr, %out, 0
+  gep @c64 %o_im_ptr, %out, 1
+
+  load f64 %a_re, %a_re_ptr
+  load f64 %a_im, %a_im_ptr
+  load f64 %b_re, %b_re_ptr
+  load f64 %b_im, %b_im_ptr
+
+  add f64 %o_re, %a_re, %b_re
+  add f64 %o_im, %a_im, %b_im
+
+  store f64 %o_re_ptr, %o_re
+  store f64 %o_im_ptr, %o_im
+  ret %out
+```
+
+##### 3.7 Grammar Productions Required
+
+- no new primitive complex type keywords in v1
+- aggregate type forms already defined for structs are sufficient
+- existing `gep`, `load`, `store`, and floating arithmetic instructions are
+  sufficient for lowered complex operations
+
+##### 3.7 In-Memory Nodes Required
+
+- no dedicated complex type node in v1
+- struct type descriptor reused for complex pair representation
+- optional metadata or type alias tagging to mark complex-origin types for debug
+  and diagnostics (for example via tags)
+
+##### 3.7 Semantic Validation Rules
+
+- in v1, complex operations must not appear as dedicated IR opcodes
+- complex-origin values must be represented as two-element float aggregates with
+  homogeneous component type (`f32` pair or `f64` pair)
+- complex arithmetic emitted by charon must preserve C99 semantic formulas:
+  - add/sub: component-wise
+  - mul: `(ar*br - ai*bi, ar*bi + ai*br)`
+  - div: lowered via target-stable formula or helper call
+- component extraction and insertion must use valid `gep` indices (`0` real,
+  `1` imaginary)
+
+##### 3.7 Lowering Notes (Target Independent)
+
+Charon fully lowers complex expressions into scalar float operations (or
+well-defined runtime helper calls when needed for correctness/performance).
+TIIR remains explicit and target-neutral, with no hidden complex semantics.
+This keeps parser and verifier scope small while preserving C99 behavior.
+
+##### 3.7 Test Coverage Status
+
+Planned
+
+- positive: complex add lowered to pairwise float adds
+- positive: complex multiply lowered to scalar float formula
+- positive: real/imag component access via `gep` indices 0 and 1
+- negative: dedicated complex opcode in v1 module
+- negative: mixed-component pair type (for example `struct { f32, f64 }`) used
+  as lowered complex representation
+- negative: invalid component index for complex pair access
 
 #### 3.8 Qualified Types: const, volatile, restrict
 
-#### 3.9 Derived Types: Pointers, Arrays, Functions
+##### 3.8 Feature
+
+C99 type qualification is represented in TIIR via existing metadata tags,
+not via separate type keywords.
+
+- `const`
+- `volatile`
+- `restrict`
+
+The canonical encoding uses `!qualifiers` with a list of qualifier atoms.
+
+- `symbol @x : i32 [!qualifiers: const]`
+- `symbol %p : ptr [!qualifiers: restrict]`
+- `symbol @reg : i32 [!qualifiers: volatile]`
+- `symbol %q : ptr [!qualifiers: const, restrict]`
+
+Qualifier semantics are attached to the declaration site (symbol/parameter/
+field) and interpreted by verifier/lowering passes.
+
+##### 3.8 Representative C Snippet
+
+```c
+extern volatile int mmio_reg;
+
+void copy(int *restrict dst, const int *restrict src) {
+  *dst = *src;
+}
+```
+
+##### 3.8 TIIR Canonical Form
+
+```tiir
+symbol @mmio_reg : i32 [!linkage: external, !qualifiers: volatile];
+
+symbol @copy : (
+  %dst: ptr [!qualifiers: restrict],
+  %src: ptr [!qualifiers: const, restrict]
+) -> void [!linkage: external]:
+%copy_bb0:
+  load i32 %0, %src
+  store i32 %dst, %0
+  ret
+```
+
+##### 3.8 Grammar Productions Required
+
+- reuse generic tag-list grammar already defined (`[!key: value, ...]`)
+- reserve `!qualifiers` metadata key with accepted atoms:
+  - `const`
+  - `volatile`
+  - `restrict`
+- allow qualifiers on symbol declarations, parameters, and aggregate fields
+
+##### 3.8 In-Memory Nodes Required
+
+- qualifier bitset on type-bearing declarations (CONST, VOLATILE, RESTRICT)
+- metadata parser support to decode `!qualifiers` into the qualifier bitset
+- optional field-level qualifier storage for struct/union members
+
+##### 3.8 Semantic Validation Rules
+
+- unknown qualifier atoms under `!qualifiers` are invalid
+- duplicate qualifier atoms in one qualifier set are invalid
+- `restrict` is valid only for pointer-typed declarations
+- `const` prohibits stores through the qualified declaration/reference
+- `volatile` marks accesses as side-effectful and non-elidable by optimization
+- redeclarations must have compatible qualifier sets for the same declared entity
+
+##### 3.8 Lowering Notes (Target Independent)
+
+Charon is responsible for mapping C qualifier syntax onto TIIR metadata tags.
+TIIR keeps qualifier semantics explicit at declaration sites through
+`!qualifiers`, enabling verifier checks and downstream optimization constraints
+without introducing additional type-surface syntax.
+
+`volatile` affects optimization legality, not value typing. `const` and
+`restrict` primarily constrain aliasing/mutation behavior and are consumed by
+analysis/lowering passes.
+
+##### 3.8 Test Coverage Status
+
+Planned
+
+- positive: volatile global symbol declaration and volatile load/store handling
+- positive: restrict-qualified pointer parameters in function signature
+- positive: const-qualified pointer source operand rejected on store-through
+- negative: `restrict` on non-pointer type
+- negative: unknown qualifier atom in `!qualifiers`
+- negative: incompatible qualifier redeclaration
+
+#### 3.9 Derived Types: Pointers, Arrays, Functions, Tuples
+
+##### 3.9 Feature
+
+C99 derived types are mapped into TIIR with explicit, compact forms:
+
+- pointers use the opaque keyword `ptr`
+- arrays use `[N T]` where `N` is a compile-time integer and `T` is element type
+- functions use `(param_types) -> return_type`
+- tuples use `(elem_type_0, elem_type_1, ...)`
+
+Structural aggregate elements may carry optional local member tags:
+
+- `struct { %x: i32, %y: i32 }`
+- `struct { i32, %count: i32 }` (mixed tagged/untagged)
+
+This keeps type spelling simple while preserving required semantics in
+instruction typing and validation.
+
+Pointer pointee details are not carried in the `ptr` type itself; pointee
+interpretation is supplied by the instruction that consumes the pointer
+(for example `load T`, `store T`, `gep BaseType`).
+
+Tuple literals use the same delimiter form with value elements:
+
+- type tuple: `(i32, f64, ptr)`
+- literal tuple: `(1, 2.0, @g)`
+
+Parsing disambiguation rule:
+
+- if `(...)` is followed by `->`, it is a function type prefix
+- otherwise, `(...)` with one or more commas is a tuple type/literal
+
+Instruction operand rules:
+
+- `call` always receives arguments as one tuple operand
+- `ret` may return an unnamed aggregate as a tuple literal operand
+- any instruction requiring variable arity receives the variable portion as a
+  tuple operand
+
+##### 3.9 Representative C Snippet
+
+```c
+int g_arr[4] = {1, 2, 3, 4};
+
+int inc(int x) { return x + 1; }
+
+int first(int *p) {
+  return p[0];
+}
+```
+
+##### 3.9 TIIR Canonical Form
+
+```tiir
+symbol @g_arr : [4 i32] = [1, 2, 3, 4];
+
+symbol @inc : (%x: i32) -> i32 [!linkage: external]:
+  add i32 %0, %x, 1
+  ret %0
+
+symbol @first : (%p: ptr) -> i32 [!linkage: external]:
+%first_bb0:
+  gep [4 i32] %0, %p, 0
+  load i32 %1, %0
+  ret %1
+
+symbol @sum2 : (%a: i32, %b: i32) -> i32 [!linkage: external]:
+  add i32 %0, %a, %b
+  ret %0
+
+symbol @use_sum2 : (%x: i32, %y: i32) -> i32 [!linkage: external]:
+  call (i32, i32) -> i32 %0, @sum2, (%x, %y)
+  ret %0
+
+symbol @make_pair : (%x: i32, %y: i32) -> (i32, i32) [!linkage: external]:
+  ret (%x, %y)
+```
+
+##### 3.9 Grammar Productions Required
+
+- pointer type keyword: `ptr`
+- array type form: `"[" integer_literal type "]"`
+- array literal initializer form: `"[" [literal {"," literal}] "]"`
+- function type form: `"(" [param_type_list] ")" "->" type`
+- tuple type form: `"(" type "," [type {"," type}] ")"`
+- tuple literal form: `"(" literal "," [literal {"," literal}] ")"`
+- call argument operand form: tuple literal only
+- var-arity instruction operand form: tuple literal packs variable operands
+- optional vararg marker in function types is deferred to later section/profile
+- `gep type dest, srcPtr, selector` is used for array/aggregate element
+  addressing, where `selector` is integer index or `%id` (for tagged structural
+  members)
+
+##### 3.9 In-Memory Nodes Required
+
+- opaque pointer type node (single canonical `ptr` type)
+- array type node: `(length, element_type)`
+- function type node: `(parameter_types, return_type)`
+- tuple type node: ordered element type list
+- tuple literal node: ordered element operand list
+- optional function-type attribute flags (for example vararg) for future extension
+
+##### 3.9 Semantic Validation Rules
+
+- `ptr` carries no implicit pointee type; pointer-consuming instructions must
+  supply explicit type context
+- array length `N` must be a positive compile-time integer in v1
+- array element type must be complete and non-`void`
+- function return type may be `void` or a non-function type
+- function parameter types may not be raw array/function forms at call boundary;
+  charon must lower C parameter decay to `ptr` before TIIR emission
+- direct calls to `@function` must match declared function type arity and types
+- single-element tuples are allowed only with trailing comma syntax (`(T,)`,
+  `(v,)`) to avoid ambiguity
+- tuple literal element count and element types must match the consumer context
+  (for example call parameter list or tuple return type)
+- `ret ( ... )` is valid only when function return type is a tuple type with
+  matching arity and element types
+- aggregate index access continues to use `gep` with integer index for tuples,
+  structs, unions, and arrays; tagged structural members may alternatively use
+  `%id` selector form
+
+##### 3.9 Lowering Notes (Target Independent)
+
+Charon resolves C declarator complexity into normalized TIIR types before
+emission. In particular:
+
+- C array-to-pointer decay is made explicit as `ptr` in expression/call contexts
+- C function-to-pointer decay is made explicit as `ptr` when a function value is
+  used as data
+- memory operations remain typed at instruction sites (`load T`, `store T`,
+  `gep BaseType`) to preserve correctness despite opaque pointers
+- call lowering always emits one tuple argument operand, even for zero/one
+  argument calls (`()`, `(arg0,)`)
+- unnamed aggregate return lowering emits `ret ( ... )` when the returned
+  aggregate is tuple-typed
+
+##### 3.9 Test Coverage Status
+
+Planned
+
+- positive: global array declaration with constant initializer
+- positive: pointer parameter plus `gep`/`load` element access
+- positive: direct function definition and call type-check
+- positive: call argument tuple matches function parameter types
+- positive: tuple-typed function return using `ret ( ... )`
+- negative: zero or negative array length
+- negative: array element type `void`
+- negative: call argument count/type mismatch versus function signature
+- negative: single-element tuple type/literal without trailing comma
+- negative: tuple return arity/type mismatch with function return type
 
 #### 3.10 Incomplete vs Completed Types
 
