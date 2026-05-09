@@ -5429,9 +5429,104 @@ memory operations annotated by existing qualifier metadata.
 
 #### 10.1 Required Diagnostics for Constraint Violations
 
+##### 10.1 Feature
+
+Constraint violations must produce diagnostics according to language conformance
+and profile settings. charon is responsible for source-level diagnostics during
+parsing/semantic analysis; Pluto may emit additional lowering-time diagnostics
+for ABI/layout/codegen constraints.
+
+Diagnostic severities:
+
+- `error`: translation/lowering cannot proceed for the affected unit/path
+- `warning`: translation may proceed, behavior/policy risk is reported
+- `note`: supplementary context attached to warning/error diagnostics
+
+##### 10.1 Lowering Notes (Target Independent)
+
+charon should emit precise source-located diagnostics for syntax, type,
+declaration, and semantic constraint violations before TIIR emission whenever
+possible. Pluto diagnostics should reference lowered entities and, where
+available, map back to source locations/metadata.
+
+##### 10.1 Grammar / In-Memory Impact
+
+- no new core TIIR grammar required
+- optional diagnostic metadata payloads may be attached by tools/passes
+- existing source-location metadata hooks are reused
+
+##### 10.1 Validation Notes
+
+- diagnostics required by this spec must not be silently suppressed
+- configured diagnostic profiles may escalate/demote selected classes where
+  allowed, but cannot downgrade mandatory hard-failure constraints below error
+- first-failure and aggregate-report modes are both permitted by implementation
+  policy
+
 #### 10.2 Undefined, Unspecified, and Implementation-Defined Behavior
 
+##### 10.2 Feature
+
+Behavior classes follow C99 taxonomy and must be tracked explicitly by frontend
+and lowering policy:
+
+- undefined behavior (UB): no language-mandated result
+- unspecified behavior: one of several permitted results, not fixed per run
+- implementation-defined behavior: implementation chooses behavior and should
+  document the choice
+
+##### 10.2 Lowering Notes (Target Independent)
+
+charon should identify UB/unspecified/implementation-defined sites when
+determinable at compile time. Pluto must apply target/profile policy for
+lowering outcomes (for example emit diagnostics, preserve behavior as-is,
+insert guards, or emit `trap` where configured).
+
+##### 10.2 Grammar / In-Memory Impact
+
+- no new core grammar required
+- optional behavior-class annotations/metadata may be attached for analysis and
+  reporting
+
+##### 10.2 Validation Notes
+
+- UB sites detected statically should produce diagnostics per profile (at least
+  warning by default, error when strict mode requires)
+- implementation-defined choices used by Pluto/charon should be discoverable in
+  toolchain documentation/output mode
+- unspecified behavior should not be falsely stabilized unless an explicit
+  profile policy mandates deterministic lowering
+
 #### 10.3 Translation Limits Affecting Frontend and IR Generation
+
+##### 10.3 Feature
+
+Translation limits bound parser, semantic, and IR generation resources (for
+example nesting depth, symbol counts, initializer complexity, and expression
+size). Limits may be profile-configurable but must produce deterministic
+diagnostics when exceeded.
+
+##### 10.3 Lowering Notes (Target Independent)
+
+charon enforces source-facing limits during parsing/semantic phases; Pluto may
+enforce additional backend/lowering limits tied to target ABI/object format.
+Both should emit clear diagnostics indicating the exceeded limit and active
+profile/configuration.
+
+##### 10.3 Grammar / In-Memory Impact
+
+- no new core TIIR grammar required
+- optional per-module/profile metadata may record active limit settings
+
+##### 10.3 Validation Notes
+
+- limit exceedance must produce diagnostics with category, threshold, and
+  observed value where available
+- implementations may support recovery/continuation after non-fatal limit
+  diagnostics, but hard resource/consistency failures must terminate affected
+  translation path
+- limit defaults and override mechanisms should be documented for reproducible
+  builds
 
 ### 11. Runtime and Library Boundary
 
