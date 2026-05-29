@@ -53,12 +53,3 @@ dkms.conf
 
 # debug information files
 *.dwo
-
-# Build directories
-build/
-cmake-build-*/
-
-
-# Added by cargo
-
-/target

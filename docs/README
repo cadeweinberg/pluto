@@ -1,0 +1,45 @@
+# The Plan
+
+Pluto's goal is to be a fast, small, and secure, target independent 
+code generation and optimization fromework.
+
+We are going to achieve this goal by adhering to Data-Oriented Design
+Principles and implementing the language in Rust.
+
+## Goals
+
+The input to the library:
+
+1. utf-8 source files
+2. native rust library
+3. c ffi bindings
+4. binary pluto-ir
+
+the output of the library:
+
+1. native x86-64 assembly source-files
+2. native elf object files
+3. binary pluto-ir
+
+
+### First steps
+
+1. Target Independent Assembly (tia)
+  - syntax + semantics
+2. Target Independent Intermediate Representation (tiir)
+  - in memory representation
+3. Target Dependent Intermediate Representation (tdir)
+  - (i.e. x86 assembly)
+  - in memory representation
+4. Serialization
+  - serialize/deserialize tia <-> tiir
+  - serialize/deserialize asm <-> tdir
+5. Translation
+  - translate tiir -> tdir
+
+## Design
+
+a program can be thought of as a set of bindings, and a set of attributes for each binding.
+
+ 
+

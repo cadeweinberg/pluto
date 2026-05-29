@@ -1,0 +1,97 @@
+# TIA: Target Independent Assembly
+
+```tia
+tag file = "...";
+tag version = "0.1.0";
+
+[
+  linkage = private,
+  debug = %0,
+]
+def x : i32 = 42;
+
+[
+  linkage = public,
+]
+def y : i64;
+
+[
+  linkage = public,
+]
+def f : (i32, i32) -> i32;
+
+[ ... ]
+type t = struct { 
+  r : f64,
+  i : f64,
+}
+
+[
+  linkage = public,
+  debug = g_dbg,
+]
+def g : (a : i32, b : i32) -> i32 {
+  add : i32 %0, a, a
+  add : i32 %1, b, b
+  mul : i32 %2, %0, %1
+  ret : i32 %2
+}
+
+dbg %0 = {
+  file = "...",
+  line = 10,
+  column = 1,
+}
+
+dbg g_dbg = {
+  file = "...",
+  line = 15,
+  column = 1,
+}
+
+```
+
+```ebnf
+
+module = { tag | [ meta ] def } ;
+tag    = "tag" id "=" literal ";" ;
+meta   = "[" { mexpr [","] } "]" ;
+mexpr  = id "=" literal ;
+
+def = typedef
+    | dbgdef
+    | "def" id ":" type "=" expr ";" ;
+
+typedef = "type" id "=" type ";" ;
+dbgdef  = "dbg"  id "=" "{" { meta-expr [","] } "}" ";" ;
+
+type = struct-type
+     | union-type
+     | array-type
+     | "void"
+     | "ptr"
+     | "i8"
+     | "i16"
+     | "i32"
+     | "i64"
+     | "u8"
+     | "u16"
+     | "u32"
+     | "u64"
+     | "f32"
+     | "f64"
+     | id ;
+
+struct-type = "struct" "{" { elem [","] } "}" ;
+union-type  = "union"  "{" { elem [","] } "}" ;
+array-type  = "[" type integral "]" ;
+elem        = "id" ":" type ;
+
+literal = string
+        | char
+        | integral
+        | float ;
+
+```
+
+
