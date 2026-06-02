@@ -53,3 +53,9 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# build directory
+zig-out/
+
+# build caches
+.zig-cache/

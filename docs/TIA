@@ -1,26 +1,30 @@
 # TIA: Target Independent Assembly
 
 ```tia
-tag file = "...";
-tag version = "0.1.0";
+// configuration points of the translation unit
+#file = "...";
+#version = "0.1.0";
 
-[
-  linkage = private,
-  debug = %0,
-]
+// configuration point of the definition
+[!0]
+// a global data definition
 def x : i32 = 42;
 
-[
-  linkage = public,
-]
+// configuration point of the declaration
+[!1]
+// a global data declaration
 def y : i64;
 
+// configuration can be inline or out-of-line
 [
   linkage = public,
 ]
+// a global function declaration
 def f : (i32, i32) -> i32;
 
+// configuration point of a type definition
 [ ... ]
+// a global type definition
 type t = struct { 
   r : f64,
   i : f64,
@@ -30,6 +34,7 @@ type t = struct {
   linkage = public,
   debug = g_dbg,
 ]
+// a global type definition
 def g : (a : i32, b : i32) -> i32 {
   add : i32 %0, a, a
   add : i32 %1, b, b
@@ -37,13 +42,17 @@ def g : (a : i32, b : i32) -> i32 {
   ret : i32 %2
 }
 
-dbg %0 = {
+!0 = {
+  ...
+}
+
+!1 = {
   file = "...",
   line = 10,
   column = 1,
 }
 
-dbg g_dbg = {
+!dbg = {
   file = "...",
   line = 15,
   column = 1,
@@ -51,10 +60,38 @@ dbg g_dbg = {
 
 ```
 
+## Semantics
+
+global configuration applies to a single translation unit.
+there is no way of importing another translation units symbols
+into the current translation unit, rather it is a prerequisite
+that external symbols are declared in the current translation unit.
+Then the linker combines these symbols when stitching together
+different object files.
+
+to support that workflow, it is possible to declare a symbol as
+many times as one wants in a single translation unit, as long as
+each declaration is compatible.
+
+the visibility of a symbol between translation units is controlled by
+the 'linkage' configuration. We are following the ELF standard here
+for what is meant by each option of linkage.
+
+additionally, there will be DWARF debugging information embedded into
+the configuration points, allowing for DWARF debugging information to
+be emitted into the object file.
+
+The goal is to define an abstract assembly language, which fits in the
+layer between a high-level programming language, such as C, and the
+target assembly language such as x86-64.
+This emitted assembly has to live in an ecosystem, and the other major
+parts of that ecosystem are the ELF object file format, the DWARF debugging
+information, and the x86-64 SystemV ABI.
+
 ```ebnf
 
 module = { tag | [ meta ] def } ;
-tag    = "tag" id "=" literal ";" ;
+tag    = "#" id "=" expr ";" ;
 meta   = "[" { mexpr [","] } "]" ;
 mexpr  = id "=" literal ;
 
