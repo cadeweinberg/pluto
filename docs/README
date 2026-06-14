@@ -4,14 +4,14 @@ Pluto's goal is to be a fast, small, and secure, target independent
 code generation and optimization fromework.
 
 We are going to achieve this goal by adhering to Data-Oriented Design
-Principles and implementing the language in Rust.
+Principles and implementing the language in Zig.
 
 ## Goals
 
 The input to the library:
 
 1. utf-8 source files
-2. native rust library
+2. native zig library
 3. c ffi bindings
 4. binary pluto-ir
 
@@ -40,6 +40,27 @@ the output of the library:
 ## Design
 
 a program can be thought of as a set of bindings, and a set of attributes for each binding.
+Each binding can be a symbol bound to a value. and the attributes define the type, linkage,
+alignment, debugging info etc...
 
+in order to keep the language simple and fast to parse we are going to write the grammar to LL(1).
+
+in order to make working with the IR fast and simple we are going to use a fixed length instruction 
+encoding in Static Single Assignment form, and the Syntax of the language will be a somewhat direct 
+encoding of the instruction format. The attribute information will also be kept in a simple format.
+A list of key value pairs. This will be LL(1) and extensible with new keywords without overlapping 
+with the source code, and without major refactoring of the compiler.
+
+in order to keep the compiler flexible with respect to optimization and code generation we will use 
+a pass style architecture. each optimization can be represented as a pass over the code, and reordering 
+passes, adding new passes and modifying existing passes will have a minimal architectural impact on 
+other passes. 
+
+in order to support multiple target specific intermediate representations, each target will be defined 
+with respect to a common API. This common API boundary will allow the code generator to make decisions 
+while abstracted away from the specifics of the intermediate representation. Each target will also 
+define a serialization API to both assembly and binary, for the creation of human readable and auditable 
+code, as well as for emission into an object file representation.
  
+
 
