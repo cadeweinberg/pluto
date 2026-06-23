@@ -100,11 +100,12 @@ def = typedef
     | "def" id ":" type "=" expr ";" ;
 
 typedef = "type" id "=" type ";" ;
-dbgdef  = "dbg"  id "=" "{" { meta-expr [","] } "}" ";" ;
+dbgdef  = "dbg"  id "=" "{" { mexpr [","] } "}" ";" ;
 
 type = struct-type
      | union-type
      | array-type
+     | fn-type
      | "void"
      | "ptr"
      | "i8"
@@ -121,14 +122,230 @@ type = struct-type
 
 struct-type = "struct" "{" { elem [","] } "}" ;
 union-type  = "union"  "{" { elem [","] } "}" ;
+enum-type   = "enum"   "{" { enum-elem [","] } "}" ;
 array-type  = "[" type integral "]" ;
 elem        = "id" ":" type ;
+enum-elem   = "id" ["=" expr] ;
 
 literal = string
         | char
         | integral
         | float ;
 
+expr = primary
+     | unop primary
+     | primary { binop primary } ;
+
 ```
+
+## Module
+
+A module is a translation unit, it defines a set of names which have linkage, type, and value.
+
+for the first version we are targeting the ELF format. And our notions of linkage type and value will 
+lower to ELF notions of linkage type and value.  
+
+a name may have metadata associated with it, the purpose of which is primarily debugging information in the form of 
+DWARF, however the syntax of metadata is deliberately free-form to allow for extension as necessary within the compiler.
+
+### Linkage
+
+a symbol may be 
+
+- internal (private)
+  an internal symbol is not visible outside of the module which contains it's definition.
+  and it is unreachable from other modules. an interal symbol may have a name which is shared 
+  with a symbol in another module, and these symbols will not conflict with one another.
+- external (public)
+  an external symbol is visible to all other modules, and is reachable from all other modules.
+  The definition of a public symbol must be unique between all modules which are intended to be 
+  linked together.
+- overridable (public)
+  an overridable symbol is visible to all other module, and is reachable from all other modules.
+  the definition of an overridable symbol may be shared with a definition of an external symbol 
+  in another module, and in this case the external symbol shall take precendence over the overridable
+  symbol. an overridable symbol may not be overriden by another overridable symbol.
+
+
+§ ELF32 - Book 1 - Symbol Table
+
+a symbol may be
+
+- STB_LOCAL: Local symbols are not visible outside the object file containing their definition. 
+  Local symbols with the same name may exist in multiple files without interfering with one another
+- STB_GLOBAL: Global symbols are visible to all other object files being combined. One files definition
+  of a global symbol will satisfy another file's undefined reference to the same global symbol
+- STB_WEAK: Weak symbols resemble global symbols, but their definitions have lower precedence.
+- STB_LOOS Environment Specific Usage
+- STB_HIOS Environment Specific Usage
+- STB_LOPROC Processor Specific Usage
+- STB_HIPROC Processor Specific Usage
+Note: STB_WEAK is useful when a standard library provides a symbol which is allowed to be overriden by 
+  another equivalent symbol at load time. This is often used to override malloc/realloc/free with another 
+  implementation when using C. such as replacing glibc malloc with jemalloc or similar.
+
+the lowering proceeds as follows:
+
+internal    -> STB_LOCAL
+external    -> STB_GLOBAL
+overridable -> STB_WEAK
+
+### Symbol Type
+
+a symbol may have type
+
+i8, i16, i32, i64, u8, u16, u32, u64, f16, f32, f64,
+array, struct, union, enum, ptr, (...) -> ...
+
+
+§ ELF32 - Book 1 - Symbol Types
+
+a symbol may have type:
+
+- STT_NOTYPE: type unspecified
+- STT_OBJECT: The symbol is associated with a data object, such as a variable, array, etc...
+- STT_FUNC: the symbol is associated with a function or other executable code
+- STT_SECTION: The symbol is associated with a section. Symbol table entries of this type
+     exist primarily for relocation and normally have STB_LOCAL binding
+- STT_FILE: the source file associated with the object file
+- STT_LOOS Environment Specific Usage
+- STT_HIOS Environment Specific Usage
+- STT_LOPROC Processor Specific Usage
+- STT_HIPROC Processor Specific Usage
+
+the lowering proceeds as follows:
+
+i8, i16, i32, i64, u8, u16, u32, u64, f16, f32, f64, array, struct, union, enum, ptr 
+  -> STT_OBJECT
+
+(...) -> ...
+  -> STT_FUNC
+
+NOTE: Research the Usage of STT_SECTION, STT_LOOS, STT_HIOS, STT_LOPROC, STT_HIPROC
+and confirm that STT_FILE is used in debugging information, or if DWARF Repeats this 
+information.
+
+### Symbol Value
+
+when a symbol has a type which is representable as a sequence of bytes, and it has a 
+constant initializer within the text of the program, that constant initializer may be 
+emitted into the object file.
+
+When a symbol is represented by a sequence of instructions, those instruction shall be 
+listed immediately following the definition of the symbol.
+
+the lowering proceeds as follows:
+
+i8, i16, i32, i64, u8, u16, u32, u64, f16, f32, f64, array, struct, union, enum, ptr
+
+(...) -> ...
+may appear immediately after the definition of the symbol.
+
+## Tags
+
+## Metadata
+
+## Definitions & Declarations
+
+## Types
+
+### Integers
+
+the signed integer types (i8, i16, i32, i64) and unsigned integer types (u8, u16, u32, u64) are stored in two's 
+compliment notation and they have defined behavior on all arithmetic operations. Different operations will have 
+different defined behavior. the default arithmetic operations are presumed to model arithmetic as it is understood,
+thus where the operations would cause an incorrect result a trap will occur.
+There will also be wrapping arithmetic which will allow the signed and unsigned values to wrap around modulo the 
+bit length.
+There will also be saturating arithmetic which will pin the result to the maximum or minimum value when the value would 
+wrap around.
+
+-> traps and exceptional behavior
+
+### Floats
+
+The floating point types (f32, f64, f16?) are stored according to the IEEE 754 standard, and their behavior follows from 
+that document.
+
+### Structures
+
+A structure type is a contiguous arrangement of types. layed out in the order that they are declared within the 
+structure definition. There is padding between the elements, which is placed when the natural alignment of adjacent 
+elements would create unaligned accesses to an element. For instance if a u8 element is immediately followed by a 
+u64, there would be 7 bytes of padding between the two elements, to ensure that the u64 was stored on an 8 byte boundary.
+
+-> forward declarations
+-> addresses
+-> element access
+
+### Unions
+
+A union type is a contiguous arrangement of types, layed out on top of eachother, such that they share the same bytes in 
+memory. Thus only one element of a union type is valid at a time, and it is undefined behavior to access an uninitialized
+element of a union. 
+
+The common pattern is to pair an enumeration with a union within a structure, such that the currently active element is 
+disambiguatable by checking the currently active tag. Whether or not the language will define syntax for this pattern is 
+undecided. leaving it off allows for greater compatibility with the existing ecosystem, and having it means for an easier 
+time of writing correct code by default. Where possible, access to the union is checked by the compiler, and errors will be 
+emitted. 
+
+### Enumerations
+
+an enumeration is a sequence of names each defined implicitly as one greater than the previous, starting from zero.
+the enumeration is backed by a signed 32 bit integer by default, this may be overriden.
+each elements value may be overriden by an expression. This expression is only allowed to be a integer constant or
+an expression which evaluates to an integer constant.
+The enumeration elements themselves cannot exceed the capacity of the backing type, and an error is emitted should this
+happen.
+
+### Pointers
+
+Pointers, or commonly Program Adresses are sequences of bits which refer to another location reachable within the programs 
+allocated memory. A pointer could hold the address of a value on the stack, in the heap, or in the constant or variable 
+data sections of the program binary. A pointer when it points to some memory is only valid to access as long as the memory 
+being pointed to is alive. The 'backing' memory has some lifetime associated with it. This is common for stack local variables,
+and the lifetime analysis is well-understood. The lifetime of constants and globals in program variable and constant sections are 
+also well understood. The difficult points are pointers to the heap, and pointers stored within the heap.
+
+a pointer to the heap is only valid for as long as the dynamically allocated memory is valid, which begins at the point of allocation 
+and ends at the point of deallocation. These points are arbitrary if not given any other rules however. And so access to a pointer 
+into the heap is uncertain, it could be safe, or it could be undefined behavior.
+
+the issue is this:
+
+fn f(...) -> ptr {
+     var a : ptr = malloc(...);
+     ...
+     return a;
+}
+
+fn g(a: ptr) -> void {
+     ...
+     free(a);
+}
+
+between f and g, any number of functions could be called. and functions which cross library layers and module layers could be called. 
+and given that a pointer is `just` an address, its value could have been stored somewhere else to be incorrectly used after g is called,
+freeing it. This can occur in code the user has written and controls, or in code the user does not write and does not control. in either
+case the view that pluto has on the pointer is restricted to just the view of the functions 'f' and 'g', should these be defined in the 
+same module. 
+
+This means something more is required. in rust, the rules of borrowing are used to track ownership and lifetime of allocated memory between 
+function boundaries. in c++ RAII and smart pointers are used to keep track of allocated lifetime and ownership, in C this problem is left 
+to the carful hands of the programmer. in interpreted languages garbage collection alogorithms are used which keep track of ownership and 
+lifetimes separately from the programmers concern.
+
+I think the rules of borrowing go something like this,
+
+1: only a single mutable reference (pointer) may be held at any point in time in the programs execution.
+2: any number of constant references (pointers) may be held at any point in time in the programs execution.
+3: in order to pass a reference to a function ...
+...
+
+a pointer stored in the heap is difficult for the same reasons, the backing memory's lifetime is not tied to the lifetime of the pointer,
+and so access could be safe or it could be undefined behavior.
+
+
 
 
