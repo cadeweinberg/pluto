@@ -93,14 +93,17 @@ information, and the x86-64 SystemV ABI.
 module = { tag | [ meta ] def } ;
 tag    = "#" id "=" expr ";" ;
 meta   = "[" { mexpr [","] } "]" ;
-mexpr  = id "=" literal ;
+mexpr  = id ["=" literal] ;
 
 def = typedef
-    | dbgdef
-    | "def" id ":" type "=" expr ";" ;
+    | tagdef
+    | fndef
+    | vardef ;
 
 typedef = "type" id "=" type ";" ;
-dbgdef  = "dbg"  id "=" "{" { mexpr [","] } "}" ";" ;
+tagdef  = "tag"  id "=" "{" { mexpr [","] } "}" ";" ;
+fndef   = "fn"   id "(" args ")" "->" type "{" body "}" ;
+vardef  = "var"  id ":" type "=" expr ";" ;
 
 type = struct-type
      | union-type
@@ -137,6 +140,40 @@ expr = primary
      | primary { binop primary } ;
 
 ```
+
+#NOTE: function bodies ar composed of instructions. those instructions each can be
+  associated with metadata, such that the instruction can be associated with a source
+  location. const/volatile qualifications. and more.
+
+
+we know that a global variable must have a constant initializer. Or an expression which 
+can be evaluated at compile time down to a constant initializer of the requisite type.
+Do we allow variables to be initialized with a sequence of instructions? or do we 
+allow a infix expression? The reason I ask is that in my last project, this became a 
+difficulty, as the way that infix expressions were represented was with instructions
+and as such a initializer expression needed to exist within a scope in order to be evaluated.
+which implied a lambda context around constant initializer expressions. I dropped support 
+for expressions and only allowed constants as the bound value directly. I think however,
+that allowing a lambda context is the full featured approach. it's very flexible and expressive,
+which allows for complex initialization. Potentially arbitrarily complex, occuring at the 
+beginning of the program. I believe my proposed solution was to have a "_init" function which 
+was run just before main, which held all of the initialization code for each global within a 
+module. if we get the linker to relocate these into the same section when linking modules together
+that works for static libraries, yet dynamic linkage would be another story.
+dynamic libraries can be loaded at runtime, so we would need a separate _init function for the 
+library. we could somehow orchestrate this to run when the dynamic library was loaded, that would 
+work. yeah, except what about multiple programs sharing the same dynamic libary at runtime,
+would we init multiple times? that breaks! 
+
+the path of least resistance is from my current perspective, constant initializers only.
+no expressions. We can add in constant initializer expressions later on down the road, 
+as an extension to the base language. It's just that when I consider them, it seems like it 
+is a good place to use compile time evaluation for the constant initializers. as in, we could 
+extend the requirement to include any expression which can be fully evaluated at compile time.
+which extends the expressiveness of the language considerably. it's also a lot of work on top 
+of what is already there.
+
+I think for simplicity we are going to stick with constant initializers, with no expressions
 
 ## Module
 
@@ -243,9 +280,33 @@ may appear immediately after the definition of the symbol.
 
 ## Tags
 
+Tags are used to communicate information about the current translation unit, from the 
+source code to the compiler. This can include the target triple, the source file that 
+the TIA source was derived from, the date the TIA was generated, a SHA256 hash of the source 
+that the TIA was derived from, anything that might be relevant to the compilation of 
+this translation unit. The target source file could be used to derive more accurate debugging 
+information. The target triple will tell the compiler what target to generate code for,
+the date and SHA256 hash can be used to tell if the source file is newer than the generated 
+TIA and may need regenerated. or that the source file is the same as what was used to generate 
+the TIA and so we know that it has not been modified.
+
 ## Metadata
 
+Metadata is used to communicate information about a particular definition to the compiler,
+such as alignment (if distinct from the natural alignment), source code location, (file, line,
+column). constness and volatility. symbol visibility for linkage, 
+
 ## Definitions & Declarations
+
+types are used to communicate layout size alignment, and compositition of values. and type definitions 
+are used to make composite types easier to understand.
+
+tags are used to name metadata so that out-of-line definitions are possible, which can clear up an otherwise
+cluttered definition.
+
+functions are used to define the pieces of executable code within the module (translation unit)
+
+variables are used to define local and global variables within the translation unit (module).
 
 ## Types
 
