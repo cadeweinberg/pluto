@@ -1,0 +1,21 @@
+# Target Dependent Assembly
+
+The varied syntax of target assembly along with their semantics calls for 
+a progromatic approach to definition of their intermediate representation.
+To ease the development of a new target for the compiler. 
+
+we could attempt to define a set of structures which are abstract enough that they
+encapsulate all possible forms of assembly, and generate against that.
+
+we could attempt to define an API against which we generate and which particular form 
+becomes a small addition to the existing code generator.
+
+or something else. 
+
+I think, since our chosen language is Zig, we will want to utilize the compile time code 
+evaluation facilities, which are used to define abstract types, to define abstract 
+assembly types. and these forms are used to construct the API.
+
+This structure is dependent on the shape of the code generator however, so we might 
+wait to attempt a definition until we have written that.
+
